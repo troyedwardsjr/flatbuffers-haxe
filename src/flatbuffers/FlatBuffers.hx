@@ -67,7 +67,7 @@ extern class FlatBuffers
 
 ////////////////////////////////////////////////////////////////////////////////
 
-@:jsRequire("flatbuffers", "Long")
+@:jsRequire("flatbuffers", "flatbuffers.Long")
 extern class Long {
 	/**
 	 * @type {Float}
@@ -115,7 +115,7 @@ extern class Long {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-@:jsRequire("flatbuffers", "Builder")
+@:jsRequire("flatbuffers", "flatbuffers.Builder")
 extern class Builder {
 	/**
 	 * @constructor
@@ -400,7 +400,7 @@ extern class Builder {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-@:jsRequire("flatbuffers", "ByteBuffer")
+@:jsRequire("flatbuffers", "flatbuffers.ByteBuffer")
 extern class ByteBuffer {
 	/**
 	 * @public static varructor
