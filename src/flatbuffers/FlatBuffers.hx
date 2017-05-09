@@ -152,8 +152,8 @@ extern class Builder {
 
 	/**
 	 * Prepare to write an element of `size` after `additional_bytes` have been
-	 * written, e.g. if you write a string, you need to align such the int length
-	 * field is aligned to 4 bytes, and the string data follows it directly. If all
+	 * written, e.g. if you write a String, you need to align such the int length
+	 * field is aligned to 4 bytes, and the String data follows it directly. If all
 	 * you need to do is alignment, `additional_bytes` will be 0.
 	 *
 	 * @param {Float} size This is the of the new element to write
@@ -294,7 +294,7 @@ extern class Builder {
 	public function nested(obj: Offset):Void;
 
 	/**
-	 * Should not be creating any other object, string or vector
+	 * Should not be creating any other object, String or vector
 	 * while an object is being constructed
 	 */
 	public function notNested():Void;
@@ -346,9 +346,9 @@ extern class Builder {
 
 	/**
 	 * @param {flatbuffers.Offset} root_table
-	 * @param {string=} file_identifier
+	 * @param {String=} file_identifier
 	 */
-	public function finish(root_table: Offset, ?file_identifier: string):Void;
+	public function finish(root_table: Offset, ?file_identifier: String):Void;
 
 	/**
 	 * This checks a required field has been set in a given table that has
@@ -380,11 +380,11 @@ extern class Builder {
 	public function endVector(): Offset;
 
 	/**
-	 * Encode the string `s` in the buffer using UTF-8. If a Uint8Array is passed
-	 * instead of a string, it is assumed to contain valid UTF-8 encoded data.
+	 * Encode the String `s` in the buffer using UTF-8. If a Uint8Array is passed
+	 * instead of a String, it is assumed to contain valid UTF-8 encoded data.
 	 *
-	 * @param {string|Uint8Array} s The string to encode
-	 * @return {flatbuffers.Offset} The offset in the buffer where the encoded string starts
+	 * @param {String|Uint8Array} s The String to encode
+	 * @return {flatbuffers.Offset} The offset in the buffer where the encoded String starts
 	 */
 	public function createString(s:haxe.extern.EitherType<String, js.html.Uint8Array>): Offset;
 
@@ -574,8 +574,8 @@ extern class ByteBuffer {
 	public function __union<T:Table>(t: T, offset:Float): T;
 
 	/**
-	 * Create a JavaScript string from UTF-8 data stored inside the FlatBuffer.
-	 * This allocates a new string and converts to wide chars upon each access.
+	 * Create a JavaScript String from UTF-8 data stored inside the FlatBuffer.
+	 * This allocates a new String and converts to wide chars upon each access.
 	 *
 	 * To avoid the conversion to UTF-16, pass flatbuffers.Encoding.UTF8_BYTES as
 	 * the "optionalEncoding" argument. This is useful for avoiding conversion to
@@ -584,9 +584,9 @@ extern class ByteBuffer {
 	 *
 	 * @param {Float} offset
 	 * @param {flatbuffers.Encoding=} optionalEncoding Defaults to UTF16_STRING
-	 * @returns {string|Uint8Array}
+	 * @returns {String|Uint8Array}
 	 */
-	public function __string(offset:Float, ?optionalEncoding: Encoding):haxe.extern.EitherType<String, js.html.Uint8Array>;
+	public function __String(offset:Float, ?optionalEncoding: Encoding):haxe.extern.EitherType<String, js.html.Uint8Array>;
 
 	/**
 	 * Retrieve the relative offset stored at "offset"
@@ -612,7 +612,7 @@ extern class ByteBuffer {
 	public function __vector_len(offset:Float):Float;
 
 	/**
-	 * @param {string} ident
+	 * @param {String} ident
 	 * @returns {boolean}
 	 */
 	public function __has_identifier(ident:String):Bool;
