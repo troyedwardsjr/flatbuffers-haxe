@@ -386,7 +386,7 @@ extern class Builder {
 	 * @param {string|Uint8Array} s The string to encode
 	 * @return {flatbuffers.Offset} The offset in the buffer where the encoded string starts
 	 */
-	public function createString(s: string|Uint8Array): Offset;
+	public function createString(s:haxe.extern.EitherType<String, js.html.Uint8Array>): Offset;
 
 	/**
 	 * Conveniance function for creating Long objects.
