@@ -121,7 +121,7 @@ extern class Builder {
 	 * @constructor
 	 * @param {Float=} initial_size
 	 */
-	public function constructor(initial_size?: Float);
+	public function new(?initial_size: Float);
 
 	/**
 	 * In order to save space, fields that are set to their default value
@@ -348,7 +348,7 @@ extern class Builder {
 	 * @param {flatbuffers.Offset} root_table
 	 * @param {string=} file_identifier
 	 */
-	public function finish(root_table: Offset, file_identifier?: string):Void;
+	public function finish(root_table: Offset, ?file_identifier: string):Void;
 
 	/**
 	 * This checks a required field has been set in a given table that has
