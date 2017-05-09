@@ -59,7 +59,7 @@ extern class FlatBuffers
   public static var float64:js.html.Float64Array;
 
   /**
-   * @type {boolean}
+   * @type {Bool}
    */
   public static var isLittleEndian:Bool;
 
@@ -101,7 +101,7 @@ extern class Long {
 
 	/**
 	 * @param {flatbuffers.Long} other
-	 * @returns {boolean}
+	 * @returns {Bool}
 	 */
 	public function equals(other:Long):Bool; // May need to change to Dynamic.
 
@@ -128,9 +128,9 @@ extern class Builder {
 	 * don't get serialized into the buffer. Forcing defaults provides a
 	 * way to manually disable this optimization.
 	 *
-	 * @param {boolean} forceDefaults true always serializes default values
+	 * @param {Bool} forceDefaults true always serializes default values
 	 */
-	public function forceDefaults(forceDefaults: boolean):Void;
+	public function forceDefaults(forceDefaults:Bool):Void;
 
 	/**
 	 * Get the ByteBuffer representing the FlatBuffer. Only call this after you've
@@ -613,7 +613,7 @@ extern class ByteBuffer {
 
 	/**
 	 * @param {String} ident
-	 * @returns {boolean}
+	 * @returns {Bool}
 	 */
 	public function __has_identifier(ident:String):Bool;
 
