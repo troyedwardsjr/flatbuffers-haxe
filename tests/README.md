@@ -10,12 +10,14 @@ then
 
 ```bash
   haxe build.hxml && webpack ./build/main.js ./public/main.js
+  live-server ./public
 ```
 
 or
 
 ```bash
   npm run build
+  live-server ./public
 ```
 
 ## How to install llib
