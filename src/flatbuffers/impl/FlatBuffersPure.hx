@@ -6,8 +6,13 @@ import haxe.ds.Either;
 import haxe.io.UInt8Array;
 import haxe.io.UInt16Array;
 import haxe.io.Int32Array;
+#if js
+import flatbuffers.io.Float32Array;
+import flatbuffers.io.Float64Array;
+#else
 import haxe.io.Float32Array;
 import haxe.io.Float64Array;
+#end
 
 typedef Offset = Int;
 
@@ -16,9 +21,9 @@ typedef TableT = {
 	bb_pos: Int
 }
 
-typedef EncodingT = {
-	UTF8_BYTES: Int,
-  UTF16_STRING: Int
+enum Encoding {
+	UTF8_BYTES;
+	UTF16_STRING;
 }
 
 class FlatBuffersPure 
@@ -26,9 +31,7 @@ class FlatBuffersPure
 	public static inline var SIZEOF_SHORT:Int = 2;
 	public static inline var SIZEOF_INT:Int = 4;
 	public static inline var FILE_IDENTIFIER_LENGTH:Int = 4;
-	public static var Encoding:EncodingT = { UTF8_BYTES: 1, UTF16_STRING: 2 };
 	public static var int32:Int32Array = new Int32Array(2);
-	// TODO: Look at this cast again.
 	public static var float32:Float32Array = Float32Array.fromData(cast FlatBuffersPure.int32.view);
 	public static var float64:Float64Array = Float64Array.fromData(cast FlatBuffersPure.int32.view);
 	public static var isLittleEndian:Bool = UInt16Array.fromData(cast UInt8Array.fromArray([1, 0]).view)[0] == 1;
@@ -48,7 +51,7 @@ class Builder
 	private var vector_num_elems:Int;
 	private var force_defaults:Bool;
 
-	public function new(opt_initial_size:Int)
+	public function new(opt_initial_size:Null<Int>)
 	{
 		if (opt_initial_size == null) {
 			initial_size = 1024;
@@ -60,7 +63,7 @@ class Builder
 		this.space = initial_size;
 		this.minalign = 1;
 		this.vtable = null;
-  	this.vtable_in_use = 0;
+		this.vtable_in_use = 0;
 		this.isNested = false;
 		this.object_start = 0;
 		this.vtables = [];
@@ -92,7 +95,7 @@ class Builder
 
 		// Find the amount of alignment needed such that `size` is properly
 		// aligned after `additional_bytes`
-		var align_size = ((~(this.bb.capacity() - this.space + additional_bytes)) + 1) & (size - 1);
+		var align_size:Int = ((~(this.bb.capacity() - this.space + additional_bytes)) + 1) & (size - 1);
 
 		// Reallocate the buffer if needed.
 		while (this.space < align_size + size + additional_bytes) {
@@ -104,7 +107,7 @@ class Builder
 		this.pad(align_size);
 	}
 
-	public function pad(byte_size):Void
+	public function pad(byte_size:Int):Void
 	{
 		for (i in 0...byte_size) {
 			this.bb.writeInt8(--this.space, 0);
@@ -144,37 +147,37 @@ class Builder
 	public function addInt8(value:Int):Void
 	{
 		this.prep(1, 0);
-  	this.writeInt8(value);
+		this.writeInt8(value);
 	}
 
 	public function addInt16(value:Int):Void
 	{
 		this.prep(2, 0);
-  	this.writeInt16(value);
+		this.writeInt16(value);
 	}
 
 	public function addInt32(value:Int):Void
 	{
 		this.prep(4, 0);
-  	this.writeInt32(value);
+		this.writeInt32(value);
 	}
 
 	public function addInt64(value:Long):Void
 	{
 		this.prep(8, 0);
-  	this.writeInt64(value);
+		this.writeInt64(value);
 	}
 
 	public function addFloat32(value:Float):Void
 	{
 		this.prep(4, 0);
-  	this.writeFloat32(value);
+		this.writeFloat32(value);
 	}
 
 	public function addFloat64(value:Float):Void
 	{
 		this.prep(8, 0);
-  	this.writeFloat64(value);
+		this.writeFloat64(value);
 	}
 
 	public function addFieldInt8(voffset:Int, value:Int, defaultValue:Int):Void
@@ -227,10 +230,10 @@ class Builder
 
 	public function addFieldOffset(voffset:Int, value:Offset, defaultValue:Offset):Void
 	{
-		if (value != defaultValue) {
-			this.nested(value);
+		if (this.force_defaults || value != defaultValue) {
+			this.addOffset(value);
 			this.slot(voffset);
-		}
+  	}
 	}
 
 	public function addFieldStruct(voffset:Int, value:Offset, defaultValue:Offset):Void
@@ -243,10 +246,9 @@ class Builder
 	
 	public function nested(obj:Offset):Void
 	{
-		//TODO
-		//if (obj != this.offset()) {
-		//	throw "FlatBuffers: struct must be serialized inline.";
-		//}
+		if (obj != this.offset()) {
+			throw "FlatBuffers: struct must be serialized inline.";
+		}
 	}
 
 	public function notNested():Void
@@ -271,7 +273,7 @@ class Builder
 		var old_buf_size = bb.capacity();
 
 		// Ensure we don't grow beyond what fits in an int.
-		if ((old_buf_size & 0xC0000000) != null) {
+		if ( !Std.is((old_buf_size & 0xC0000000), Int) ) {
 			throw "FlatBuffers: cannot grow buffer beyond 2 gigabytes.";
 		}
 
@@ -291,7 +293,7 @@ class Builder
 	public function addOffset(offset:Offset):Void 
 	{
 		this.prep(FlatBuffersPure.SIZEOF_INT, 0); // Ensure alignment is already done.
-  	this.writeInt32(this.offset() - offset + FlatBuffersPure.SIZEOF_INT);
+		this.writeInt32(this.offset() - offset + FlatBuffersPure.SIZEOF_INT);
 	}
 
 	public function startObject(numfields:Int):Void
@@ -315,48 +317,52 @@ class Builder
 		}
 
 		this.addInt32(0);
-		var vtableloc = this.offset();
+		var vtableloc:Int = this.offset();
 
 		// Trim trailing zeroes.
-		var i = this.vtable_in_use - 1;
-		while(i >= 0 && this.vtable[i] != null) {i--;}
-		var trimmed_size = i + 1;
-
-		// Write out the current vtable.
-		while (i >= 0) {
-			// Offset relative to the start of the table.
+		var i:Int = this.vtable_in_use - 1;
+		while(i >= 0) {
 			this.addInt16(this.vtable[i] != 0 ? vtableloc - this.vtable[i] : 0);
 			i--;
 		}
 
 		var standard_fields = 2; // The fields below:
 		this.addInt16(vtableloc - this.object_start);
-		var len = (trimmed_size + standard_fields) * FlatBuffersPure.SIZEOF_SHORT;
-		this.addInt16(len);
+		this.addInt16((this.vtable_in_use + standard_fields) * FlatBuffersPure.SIZEOF_SHORT);
 
 		// Search for an existing vtable that matches the current one.
-		var existing_vtable = 0;
-		var vt1 = this.space;
+		var existing_vtable:Null<Int> = 0;
+		var outer_loop:Bool = false;
 
-		//TODO: outer loop.
 		for (i in 0...this.vtables.length) {
-			var vt2 = this.bb.capacity() - this.vtables[i];
-			if (len == this.bb.readInt16(vt2)) {
-					var j:Int = FlatBuffersPure.SIZEOF_SHORT;
-					while(j < len) {
-							if (this.bb.readInt16(vt1 + j) != this.bb.readInt16(vt2 + j)) {
-								j += FlatBuffersPure.SIZEOF_SHORT;
-								continue;
-							}
-						
-						existing_vtable = this.vtables[i];
-						break;
-					}
-			}
-		}
-		
+			var vt1:Int = this.bb.capacity() - this.vtables[i];
+			var vt2:Int = this.space;
+			var len:Int = this.bb.readInt16(vt1);
 
-		if (existing_vtable != null) {
+			if (len == this.bb.readInt16(vt2)) {
+
+				var j = FlatBuffersPure.SIZEOF_SHORT;
+				while(j < len) {
+					if (this.bb.readInt16(vt1 + j) != this.bb.readInt16(vt2 + j)) {
+						outer_loop = true;
+					} else {
+						outer_loop = false;
+					}
+					j += FlatBuffersPure.SIZEOF_SHORT;
+				}
+
+				existing_vtable = this.vtables[i];
+				if(outer_loop) {
+					continue;
+				} else {
+					break;
+				}
+
+			}
+			
+		}	
+
+		if (existing_vtable != 0) {
 			// Found a match:
 			// Remove the current vtable.
 			this.space = this.bb.capacity() - vtableloc;
@@ -376,10 +382,10 @@ class Builder
 		return vtableloc;
 	}
 
-	public function finish(root_table:Offset, ?opt_file_identifier:String):Void
+	public function finish(root_table:Offset, ?opt_file_identifier:Null<String>):Void
 	{
 		if (opt_file_identifier != null) {
-			var file_identifier = opt_file_identifier;
+			var file_identifier:Null<String> = opt_file_identifier;
 			this.prep(this.minalign, FlatBuffersPure.SIZEOF_INT +
 				FlatBuffersPure.FILE_IDENTIFIER_LENGTH);
 			if (file_identifier.length != FlatBuffersPure.FILE_IDENTIFIER_LENGTH) {
@@ -399,9 +405,9 @@ class Builder
 	}
 
 	public function requiredField(table:Offset, field:Int):Void{
-		var table_start = this.bb.capacity() - table;
-		var vtable_start = table_start - this.bb.readInt32(table_start);
-		var ok = this.bb.readInt16(vtable_start + field) != 0;
+		var table_start:Int = this.bb.capacity() - table;
+		var vtable_start:Int = table_start - this.bb.readInt32(table_start);
+		var ok:Bool = this.bb.readInt16(vtable_start + field) != 0;
 
 		// If this fails, the caller will show what field needs to be set.
 		if (!ok) {
@@ -420,7 +426,7 @@ class Builder
 	public function endVector():Offset
 	{
 		this.writeInt32(this.vector_num_elems);
-  	return this.offset();
+		return this.offset();
 	}
 
 	public function createString(s:Either<UInt8Array, String>):Offset
@@ -430,9 +436,8 @@ class Builder
 			case Left(s): 
 				utf8 = s;
 			case Right(s):
-				//TODO: Possibly redo later.
-				var tempArray:Array<Int> = [];
-				var i = 0;
+				var tmpArray:Array<Int> = [];
+				var i:Int = 0;
 
 				while (i < s.length) {
 					var codePoint;
@@ -448,35 +453,37 @@ class Builder
 
 					// Encode UTF-8
 					if (codePoint < 0x80) {
-						tempArray.push(codePoint);
+						tmpArray.push(codePoint);
 					} else {
 						if (codePoint < 0x800) {
-							tempArray.push(((codePoint >> 6) & 0x1F) | 0xC0);
+							tmpArray.push(((codePoint >> 6) & 0x1F) | 0xC0);
 						} else {
 							if (codePoint < 0x10000) {
-								tempArray.push(((codePoint >> 12) & 0x0F) | 0xE0);
+								tmpArray.push(((codePoint >> 12) & 0x0F) | 0xE0);
 							} else {
-								tempArray.push(((codePoint >> 18) & 0x07) | 0xF0);
-								tempArray.push(((codePoint >> 12) & 0x3F) | 0x80);
+								tmpArray.push(((codePoint >> 18) & 0x07) | 0xF0);
+								tmpArray.push(((codePoint >> 12) & 0x3F) | 0x80);
 							}
-							tempArray.push(((codePoint >> 6) & 0x3F) | 0x80);
+							tmpArray.push(((codePoint >> 6) & 0x3F) | 0x80);
 						}
-						tempArray.push((codePoint & 0x3F) | 0x80);
+						tmpArray.push((codePoint & 0x3F) | 0x80);
 					}
 				}
-				utf8 = UInt8Array.fromArray(tempArray);
+				utf8 = UInt8Array.fromArray(tmpArray);
 		}
 
 		this.addInt8(0);
 		this.startVector(1, utf8.length, 1);
 		this.bb.setPosition(this.space -= utf8.length);
 
-		var i = 0, offset = this.space, bytes = this.bb.bytes();
-		while(i < utf8.length)
+		var offset = this.space; 
+		var bytes = this.bb.bytes();
+
+		for(i in 0...utf8.length)
 		{
 			bytes[offset++] = utf8[i];
-			i++;
 		}
+		
 		return this.endVector();
 	}
 
@@ -490,7 +497,7 @@ class Builder
 class ByteBuffer
 {
 	private var bytes_:UInt8Array;
-	private var position_:Int;
+	public var position_:Int;
 
 	public function new(bytes:UInt8Array) {
 		this.bytes_ = bytes;
@@ -565,7 +572,7 @@ class ByteBuffer
 	public function readFloat32(offset:Int):Float
 	{
 		FlatBuffersPure.int32[0] = this.readInt32(offset);
-  	return FlatBuffersPure.float32[0];
+		return FlatBuffersPure.float32[0];
 	}
 
 	public function readFloat64(offset:Int):Float
@@ -588,13 +595,15 @@ class ByteBuffer
 	public function writeInt16(offset:Int, value:Int):Void
 	{
 		this.bytes_[offset] = value;
-  	this.bytes_[offset + 1] = value >> 8;
+		this.bytes_[offset + 1] = value >> 8;
 	}
 
 	public function writeInt32(offset:Int, value:Int):Void
 	{
 		this.bytes_[offset] = value;
-  	this.bytes_[offset + 1] = value >> 8;
+		this.bytes_[offset + 1] = value >> 8;
+		this.bytes_[offset + 2] = value >> 16;
+		this.bytes_[offset + 3] = value >> 24;
 	}
 
 	public function writeUint32(offset:Int, value:Int):Void
@@ -608,19 +617,19 @@ class ByteBuffer
 	public function writeInt64(offset:Int, value:Long):Void
 	{
 		this.writeInt32(offset, value.low);
-  	this.writeInt32(offset + 4, value.high);
+		this.writeInt32(offset + 4, value.high);
 	}
 
 	public function writeUint64(offset:Int, value:Long):Void
 	{
 		this.writeUint32(offset, value.low);
-    this.writeUint32(offset + 4, value.high);
+		this.writeUint32(offset + 4, value.high);
 	}
 	
 	public function writeFloat32(offset:Int, value:Float):Void
 	{
 		FlatBuffersPure.float32[0] = value;
-  	this.writeInt32(offset, FlatBuffersPure.int32[0]);
+		this.writeInt32(offset, FlatBuffersPure.int32[0]);
 	}
 
 	public function writeFloat64(offset:Int, value:Float):Void
@@ -633,7 +642,7 @@ class ByteBuffer
 	public function __offset(bb_pos:Int, vtable_offset:Int):Int
 	{
 		var vtable = bb_pos - this.readInt32(bb_pos);
-  	return vtable_offset < this.readInt16(vtable) ? this.readInt16(vtable + vtable_offset) : 0;
+		return vtable_offset < this.readInt16(vtable) ? this.readInt16(vtable + vtable_offset) : 0;
 	}
 
 	public function __union(t:TableT, offset:Int):TableT
@@ -643,7 +652,7 @@ class ByteBuffer
 		return t;
 	}
 
-	public function __string(offset:Int, opt_encoding:Int):Either<String, UInt8Array>
+	public function __string(offset:Int, opt_encoding:Int):String
 	{
 		offset += this.readInt32(offset);
 
@@ -653,9 +662,11 @@ class ByteBuffer
 
 		offset += FlatBuffersPure.SIZEOF_INT;
 
-		if (opt_encoding == FlatBuffersPure.Encoding.UTF8_BYTES) {
+		/*
+		if (opt_encoding == Encoding.UTF8_BYTES.getIndex()) {
 			return Right(this.bytes_.subarray(offset, offset + length));
 		}
+		*/
 
 		while (i < length) {
 			var codePoint;
@@ -697,8 +708,7 @@ class ByteBuffer
 				String.fromCharCode((codePoint & ((1 << 10) - 1)) + 0xDC00);
 			}
 		}
-		//TODO: Look at this return again.
-		return Left(result);
+		return result;
 	}
 
 	public function __indirect(offset:Int):Int
@@ -736,11 +746,10 @@ class ByteBuffer
 
 }
 
-//TODO: Possibly extend Int64
 class Long 
 {
+	private inline static var MAX_32_PRECISION = 4294967296;
 	public static var ZERO:Long = new Long(0, 0);
-
 	public var low:Int;
 	public var high:Int;
 	
@@ -750,6 +759,11 @@ class Long
 		this.high = high;
 	}
 
+	public function getInstance():Long
+	{
+		return ZERO;
+	}
+
 	public static function create(low, high):Long
 	{
 		return low == 0 && high == 0 ? ZERO : new Long(low, high);
@@ -757,8 +771,7 @@ class Long
 
 	public function toFloat64():Float
 	{
-		//return (this.low >>> 0) + this.high * 0x100000000);
-		return 0.0;
+		return (Int64.getHigh(this.high) * MAX_32_PRECISION + Int64.getLow(this.low));
 	}
 
 	public function equals(other:Long):Bool
