@@ -17,6 +17,7 @@ table Monster {
   color:Color = Blue; // Enum.
   weapons:[Weapon];   // Vector of tables.
   equipped:Equipment; // Union.
+  path:[Vec3];        // Vector of structs.
 }
 table Weapon {
   name:string;

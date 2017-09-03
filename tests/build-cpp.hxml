@@ -1,0 +1,4 @@
+-lib flatbuffers
+-main UnitTest
+-cpp build/cpp
+-debug

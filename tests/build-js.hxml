@@ -1,0 +1,4 @@
+-lib flatbuffers
+-main UnitTest
+-js build/js/test.js
+-debug
