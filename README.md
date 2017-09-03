@@ -7,4 +7,9 @@ An implementation of Google's FlatBuffers in Haxe.
   haxelib git flatbuffers https://github.com/troyedwardsjr/flatbuffers-haxe.git
 ```
 
-Current targets: JS, C++/Neko (Coming), Android/Java (Possibly Coming), AS3 (Possibly coming but not likely).
+Current targets: 
+JS, 
+C++/Neko, 
+Android(Java) (Untested, but should work), 
+AS3 (Untested, but should work),
+ect.
