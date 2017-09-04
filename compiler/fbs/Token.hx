@@ -33,9 +33,8 @@ enum FbsTokenDef {
 	TString(s:String);
 	TNumber(s:String);
 	TComment(s:String);
+	TBool(s:String);
 	TEof;
-	TObject;
-	TCircular;
 }
 
 class FbsToken {

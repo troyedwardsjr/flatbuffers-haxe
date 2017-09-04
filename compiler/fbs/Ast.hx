@@ -1,10 +1,10 @@
 
 package fbs;
 
-enum FbsPredefinedType {
+enum FbsPrimitiveType {
+	TBool;
 	TByte;
 	TUByte;
-	TBool;
 	TShort;
 	TUShort;
 	TInt;
@@ -13,10 +13,12 @@ enum FbsPredefinedType {
 	TLong;
 	TULong;
 	TDouble;
+	TString;
 }
 
 enum FbsType {
-	TPredefined(t:FbsPredefinedType);
+	TPrimitive(t:FbsPrimitiveType);
+	TComposite(t:String);
 }
 
 enum FbsPropertyName {
@@ -28,7 +30,7 @@ enum FbsPropertyName {
 typedef FbsEnum = {
 	name: String,
 	type: FbsType,
-	constructors: Array<FbsEnumCtor>
+	ctors: Array<FbsEnumCtor>
 }
 
 typedef FbsEnumCtor = {
@@ -36,6 +38,36 @@ typedef FbsEnumCtor = {
 	value: Null<String>
 }
 
+typedef FbsUnion = {
+	name: String,
+	values: Array<String>
+}
+typedef FbsStruct = {
+	name: String,
+	fields: Array<FbsStructFields>
+}
+
+typedef FbsStructFields = {
+	key: String,
+	type: FbsType
+}
+
+typedef FbsTable = {
+	name: String,
+	fields: Array<FbsTableFields>
+}
+
+typedef FbsTableFields = {
+	key: String,
+	type: Array<FbsType>,
+	defaultValue: Null<String>
+}
+
 enum FbsDeclaration {
+	DNamespace(ns:Array<String>);
 	DEnum(en:FbsEnum);
+	DUnion(un:FbsUnion);
+	DStruct(str:FbsStruct);
+	DTable(tb:FbsTable);
+	DRootType(rt:Array<String>);
 }

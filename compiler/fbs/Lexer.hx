@@ -29,9 +29,9 @@ class Lexer extends hxparse.Lexer implements hxparse.RuleBuilder {
 		"|" => mk(TPipe, lexer),
 		"!=" => mk(TEof, lexer),
 		"\\." => mk(TDot, lexer),
-		"OBJECT" => mk(TObject, lexer),
-		"CIRCULAR" => mk(TCircular, lexer),
 		"\\.\\.\\." => mk(TEllipsis, lexer),
+		//"(true|false)" => mk(TBool((cast lexer.current:String).toLowerCase() == "true" ? true : false), lexer),
+		"(true|false)" => mk(TBool(lexer.current), lexer),
 		"-?(([1-9][0-9]*)|0)(.[0-9]+)?([eE][\\+\\-]?[0-9]?)?" => mk(TNumber(lexer.current), lexer),
 		'"' => {
 			buf = new StringBuf();
