@@ -18,7 +18,8 @@ typedef HaxeModule = {
 typedef FieldType = {
 	type:ComplexType, 
 	alias:String,
-	memSize:Int
+	memSize:Int,
+	defaultVal:String
 };
 
 class Converter {
@@ -255,18 +256,23 @@ class Converter {
 		var vtable_offset:Int = 2;
 		var funcFields:Array<Field> = structObj.fields.map(function(field:FbsTableField) {
 			var retExpr:Expr;
-			var fieldType:FieldType = convertType(field.type[0].getParameters()[0]);
-
+			var fieldType:FieldType;
 			switch (field.type[0]) {
 				case TPrimitive(t): 
 					fieldType = convertType(field.type[0].getParameters()[0]);
+					switch(fieldType.alias) {
+						case "String":
+							fieldType.alias = "__string";
+						default:
+							fieldType.alias = 'read' + fieldType.alias;
+					}
 					retExpr = makeExpr(EReturn(
 						makeExpr(ETernary(
-							makeIdent('offset != 0'), makeIdent('this.bb.read${fieldType.alias}(this.bb_pos + offset)'), makeIdent('0')
+							makeIdent('offset != 0'), makeIdent('this.bb.${fieldType.alias}(this.bb_pos + offset)'), makeIdent(fieldType.defaultVal)
 						))
 					));
 				case TComposite(t): 
-					fieldType = {type: makeType(t), alias: t, memSize: 0};
+					fieldType = {type: makeType(t), alias: t, memSize: 0, defaultVal: '0'};
 					retExpr = makeExpr(EReturn(
 						makeExpr(ETernary(
 							makeIdent('offset != 0'), makeIdent('(obj != null ? obj.__init(this.bb_pos + offset, this.bb) : new ${t}().__init(this.bb_pos + offset, this.bb))'), makeIdent('null')
@@ -280,7 +286,7 @@ class Converter {
 				name: field.name,
 				kind: FFun({
 					args: [],
-					ret: makeType('Null<Float>'),
+					ret: makeType('Null', null, [TPType(fieldType.type)]),
 					expr: makeExpr(EBlock([
 						makeExpr(makeVar(
 							'offset', makeType('Null<Int>'), makeIdent('this.bb.__offset(this.bb_pos, ${vtable_offset})')
@@ -295,6 +301,7 @@ class Converter {
 				pos: nullPos
 			}
 		});
+
 		var funcStartFields:Field = {
 			name: 'start${structObj.name}',
 			kind: FFun({
@@ -313,9 +320,45 @@ class Converter {
 			access: [APublic],
 			pos: nullPos
 		}
-		//var funcAddFields:Array<Field> = structObj.fields.map(function(field:FbsTableField) {
-		//		
-		//});
+		
+		var funcAddFields:List<Field> = structObj.fields.mapi(function(i:Int, field:FbsTableField) {
+			var fieldType:FieldType;
+			var fieldName:String = field.name; // Field name to have "Offset" added if needed.
+			switch (field.type[0]) {
+				case TPrimitive(t): 
+					fieldType = convertType(field.type[0].getParameters()[0]);
+					switch(fieldType.alias) {
+						case "String":
+							fieldName += "Offset";
+							fieldType.alias = "Offset";
+							fieldType.type = makeType("Offset");
+							fieldType.defaultVal = "0";
+						case "Int64":
+							fieldType.defaultVal = "builder.createLong(0, 0)";
+					}
+				case TComposite(t): 
+					fieldType = {type: makeType(t), alias: "Offset", memSize: 0, defaultVal: "0"};
+			}
+
+			return {
+				name: 'add${field.name.charAt(0).toUpperCase() + field.name.substr(1)}',
+				kind: FFun({
+					args: [makeFuncArg("builder", makeType("Builder")), makeFuncArg(fieldName, fieldType.type)],
+					ret: makeType('Void'),
+					expr: makeExpr(EBlock([
+						makeExpr(ECall(
+							makeIdent('builder.addField${fieldType.alias}'), 
+							[makeIdent(Std.string(i)), makeIdent(fieldName), makeIdent(fieldType.defaultVal)]
+						))
+					])),
+					params: null
+				}),
+				doc: null,
+				meta: [],
+				access: [APublic],
+				pos: nullPos
+			}
+		});
 		var funcEndFields:Field = {
 			name: 'end${structObj.name}',
 			kind: FFun({
@@ -344,6 +387,7 @@ class Converter {
 			[convertTableGetRoot(structObj)],
 			funcFields,
 			[funcStartFields],
+			funcAddFields,
 			[funcEndFields]
 		]));
 		
@@ -390,18 +434,18 @@ class Converter {
 	// Utils.
 	function convertType(type:FbsPrimitiveType):FieldType {
 		return switch(type) {
-			case TBool: {type: makeType("Bool"), alias: "Int8", memSize: 1};// Bool/Int8
-			case TByte: {type: makeType("Int"), alias: "Int8", memSize: 1}; // Int8
-			case TUByte: {type: makeType("Int"), alias: "Int16", memSize: 1}; // Int8
-			case TShort: {type: makeType("Int"), alias: "Int16", memSize: 2}; // Int16
-			case TUShort: {type: makeType("Int"), alias: "Int16", memSize: 2}; // Int16
-			case TInt: {type: makeType("Int"), alias: "Int32", memSize: 4}; // Int32
-			case TUInt: {type: makeType("Int"), alias: "Int32", memSize: 4}; // Int32
-			case TFloat: {type: makeType("Float"), alias: "Int32", memSize: 4}; // Float32
-			case TLong: {type: makeType("Long"), alias: "Int32", memSize: 8}; // Int64
-			case TULong: {type: makeType("Long"), alias: "Int64", memSize: 8}; // Int64
-			case TDouble: {type: makeType("Float"), alias: "Float64", memSize: 8}; // Float64
-			case TString: {type: makeType("String"), alias: "String", memSize: 8}; // String
+			case TBool: {type: makeType("Bool"), alias: "Int8", memSize: 1, defaultVal: "0"};// Bool/Int8
+			case TByte: {type: makeType("Int"), alias: "Int8", memSize: 1, defaultVal: "0"}; // Int8
+			case TUByte: {type: makeType("Int"), alias: "Int8", memSize: 1, defaultVal: "0"}; // Int8
+			case TShort: {type: makeType("Int"), alias: "Int16", memSize: 2, defaultVal: "0"}; // Int16
+			case TUShort: {type: makeType("Int"), alias: "Int16", memSize: 2, defaultVal: "0"}; // Int16
+			case TInt: {type: makeType("Int"), alias: "Int32", memSize: 4, defaultVal: "0"}; // Int32
+			case TUInt: {type: makeType("Int"), alias: "Int32", memSize: 4, defaultVal: "0"}; // Int32
+			case TFloat: {type: makeType("Float"), alias: "Float32", memSize: 4, defaultVal: "0.0"}; // Float32
+			case TLong: {type: makeType("Long"), alias: "Int64", memSize: 8, defaultVal: "0"}; // Int64
+			case TULong: {type: makeType("Long"), alias: "Int64", memSize: 8, defaultVal: "0"}; // Int64
+			case TDouble: {type: makeType("Float"), alias: "Float64", memSize: 8, defaultVal: "0.0"}; // Float64
+			case TString: {type: makeType("String"), alias: "String", memSize: 8, defaultVal: "null"}; // String
 		}
 	}
 
