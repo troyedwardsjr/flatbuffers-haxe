@@ -5,10 +5,10 @@ import fbs.Parser;
 
 import haxe.macro.Expr;
 import haxe.macro.Type;
+import haxe.macro.TypeTools;
 
 using StringTools;
 using Lambda;
-import haxe.macro.TypeTools;
 
 typedef HaxeModule = {
 	types: Array<TypeDefinition>,
@@ -38,7 +38,7 @@ class Converter {
 
 		parsedObj.enums.map(function(decl:FbsDeclaration) {
 			currentModule.types.push(convertEnum(decl));
-			trace( printer.printTypeDefinition(convertEnum(decl)) );
+			//trace( printer.printTypeDefinition(convertEnum(decl)) );
 		});
 
 		parsedObj.structs.map(function(decl:FbsDeclaration) {
@@ -48,7 +48,7 @@ class Converter {
 		
 		parsedObj.tables.map(function(decl:FbsDeclaration) {
 			currentModule.types.push(convertTable(decl));
-			trace( printer.printTypeDefinition(convertTable(decl)) );
+			//trace( printer.printTypeDefinition(convertTable(decl)) );
 		});
 		
 
@@ -176,22 +176,17 @@ class Converter {
 		}, 0);
 
 		var expr:Array<Expr> = [];
-		var byteSize:Int = 0;
-		var fieldsReversed = structObj.fields.copy();
+		var byteIndex:Int = 0;
 
-		for (i in 0...fieldsReversed.length) {
-			var fieldType:FieldType = convertType(fieldsReversed[i].type.getParameters()[0]);
+		for (i in 0...structObj.fields.length) {
+			var fieldType:FieldType = convertType(structObj.fields[i].type.getParameters()[0]);
 			var padding:Int = 0;
-			byteSize += fieldType.memSize;
-
-			if(i == fieldsReversed.length - 1) {
-				padding = fieldType.memSize - (byteSize % minAlign);
-				byteSize += padding;
+		
+			if(fieldType.memSize + (byteIndex % minAlign) > minAlign) {
+				padding = (Math.ceil(byteIndex / minAlign) * minAlign) - byteIndex;
+				byteIndex += padding;
 			}
-			else if(fieldType.memSize + (byteSize % minAlign) > minAlign) {
-				padding = (fieldType.memSize + (byteSize % minAlign)) - minAlign;
-				byteSize += padding;
-			}
+			byteIndex += fieldType.memSize;
 
 			// Padding.
 			if(padding != 0) {
@@ -200,14 +195,14 @@ class Converter {
 				));
 			}
 			expr.unshift(makeExpr(
-				ECall(makeIdent('builder.write${fieldType.alias}'), [makeIdent(fieldsReversed[i].name)])
+				ECall(makeIdent('builder.write${fieldType.alias}'), [makeIdent(structObj.fields[i].name)])
 			));
 
 		}
 
 		// Check if final buffer is divisible by minimum alignment (1, 2. 4 or 8), if not round up to the nearest divisible number.
-		var finalSize:Int = Std.int(Math.ceil(byteSize / minAlign) * minAlign);
-		var endPadding:Int = finalSize - byteSize;
+		var finalSize:Int = Std.int(Math.ceil(byteIndex / minAlign) * minAlign);
+		var endPadding:Int = finalSize - byteIndex;
 		if(endPadding != 0) {
 			expr.unshift(makeExpr(
 				ECall(makeIdent('builder.pad'), [makeIdent(Std.string(endPadding))])
@@ -263,6 +258,8 @@ class Converter {
 					switch(fieldType.alias) {
 						case "String":
 							fieldType.alias = "__string";
+						case "Int64":
+							fieldType.defaultVal = "Long.create(0, 0)";
 						default:
 							fieldType.alias = 'read' + fieldType.alias;
 					}
@@ -317,7 +314,7 @@ class Converter {
 			}),
 			doc: null,
 			meta: [],
-			access: [APublic],
+			access: [APublic, AStatic],
 			pos: nullPos
 		}
 		
@@ -355,7 +352,7 @@ class Converter {
 				}),
 				doc: null,
 				meta: [],
-				access: [APublic],
+				access: [APublic, AStatic],
 				pos: nullPos
 			}
 		});
@@ -376,7 +373,7 @@ class Converter {
 			}),
 			doc: null,
 			meta: [],
-			access: [APublic],
+			access: [APublic, AStatic],
 			pos: nullPos
 		}
 
@@ -420,7 +417,7 @@ class Converter {
 				}),
 				doc: null,
 				meta: [],
-				access: [APublic],
+				access: [APublic, AStatic],
 				pos: nullPos
 		};
 	}
