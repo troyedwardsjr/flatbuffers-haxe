@@ -1,0 +1,5 @@
+-main FlatHx
+-cp compiler
+-lib hxparse
+-lib hxargs
+-neko run.n

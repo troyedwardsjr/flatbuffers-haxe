@@ -30,7 +30,7 @@ class Parser extends hxparse.Parser<hxparse.LexerTokenSource<FbsToken>, FbsToken
 	}
 
 	// Parse FlatBuffer IDL.
-	public function parse():{} {
+	public function parse():ParsedObject {
 		while(true) {
 			switch stream {
 				case [{def: TComment(s)}]:
@@ -162,14 +162,14 @@ class Parser extends hxparse.Parser<hxparse.LexerTokenSource<FbsToken>, FbsToken
 		return decl;
 	}
 
-	function structFields(arr:Array<FbsStructFields>):Array<FbsStructFields> {
+	function structFields(arr:Array<FbsStructField>):Array<FbsStructField> {
 		while (true) {
 			switch stream {
 				case [{def: TRBrace}]: break;
 				case [{def: TComment(s)}]:
 				case [{def: TIdent(s)}, {def: TColon}, t = type(), {def: TSemicolon}]: 
 					arr.push({
-						key: s,
+						name: s,
 						type: t
 					});
 			}
@@ -195,14 +195,14 @@ class Parser extends hxparse.Parser<hxparse.LexerTokenSource<FbsToken>, FbsToken
 		return decl;
 	}
 
-	function tableFields(arr:Array<FbsTableFields>):Array<FbsTableFields> {
+	function tableFields(arr:Array<FbsTableField>):Array<FbsTableField> {
 		while (true) {
 			switch stream {
 				case [{def: TRBrace}]: break;
 				case [{def: TComment(s)}]:
 				case [{def: TIdent(s)}, {def: TColon}, t = typeVector([]), tn = tableNext()]: 
 					arr.push({
-						key: s,
+						name: s,
 						type: t,
 						defaultValue: tn
 					});

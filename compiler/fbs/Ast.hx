@@ -44,21 +44,21 @@ typedef FbsUnion = {
 }
 typedef FbsStruct = {
 	name: String,
-	fields: Array<FbsStructFields>
+	fields: Array<FbsStructField>
 }
 
-typedef FbsStructFields = {
-	key: String,
+typedef FbsStructField = {
+	name: String,
 	type: FbsType
 }
 
 typedef FbsTable = {
 	name: String,
-	fields: Array<FbsTableFields>
+	fields: Array<FbsTableField>
 }
 
-typedef FbsTableFields = {
-	key: String,
+typedef FbsTableField = {
+	name: String,
 	type: Array<FbsType>,
 	defaultValue: Null<String>
 }

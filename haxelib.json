@@ -7,5 +7,9 @@
   "tags": ["js","extern", "flatbuffers"],
   "description": "Implementation of Google's FlatBuffers for Haxe.",
   "version": "0.0.1",
-  "releasenote": "FlatBuffers"
+  "releasenote": "FlatBuffers",
+  "dependencies": {
+    "hxparse": "4.0.0",
+    "hxargs": "3.0.2"
+  }
 }

@@ -11,8 +11,9 @@ using StringTools;
 using Lambda;
 
 typedef HaxeModule = {
+	className: String,
 	types: Array<TypeDefinition>,
-	toplevel: Array<Field>
+	toplevel: Array<String>
 }
 
 typedef FieldType = {
@@ -23,45 +24,51 @@ typedef FieldType = {
 };
 
 class Converter {
-	public var modules(default, null):Map<String, HaxeModule>;
 	static var nullPos:Position = { min: 0, max: 0, file: "" };
 	var currentModule:HaxeModule;
 
 	public function new() {
-		modules = new Map();
-		currentModule = {types: [], toplevel: []};
+		currentModule = {className: "", types: [], toplevel: []};
 	}
 
-	public function convert(parsedObj:ParsedObject) {
-		var printer:haxe.macro.Printer = new haxe.macro.Printer();
-		//printer.printTypeDefinition(convertClass(parsedObj))
-
+	public function convert(parsedObj:ParsedObject):HaxeModule {
+		parsedObj.namespaces.map(function(decl:FbsDeclaration) {
+			currentModule.toplevel.push(convertNamespace(decl));
+		});
+		currentModule.toplevel.push(convertImport());
 		parsedObj.enums.map(function(decl:FbsDeclaration) {
 			currentModule.types.push(convertEnum(decl));
-			//trace( printer.printTypeDefinition(convertEnum(decl)) );
 		});
-
 		parsedObj.structs.map(function(decl:FbsDeclaration) {
 			currentModule.types.push(convertStruct(decl));
-			trace( printer.printTypeDefinition(convertStruct(decl)) );
 		});
-		
 		parsedObj.tables.map(function(decl:FbsDeclaration) {
 			currentModule.types.push(convertTable(decl));
-			//trace( printer.printTypeDefinition(convertTable(decl)) );
 		});
-		
+		parsedObj.rootTypes.map(function(decl:FbsDeclaration) {
+			currentModule.className = convertRootType(decl);
+		});
 
+		return currentModule;
 	}
 
-	function convertNamespace(decl:FbsDeclaration):TypeDefinition {
-		return null;
+	function convertImport():String
+	{
+		return 'import flatbuffers.FlatBuffers;\nimport flatbuffers.FlatBuffers.ByteBuffer;\nimport flatbuffers.FlatBuffers.Offset;\nimport flatbuffers.FlatBuffers.Builder;\nimport flatbuffers.FlatBuffers.Long;\nimport flatbuffers.impl.FlatBuffersPure.Encoding;\nimport flatbuffers.impl.FlatBuffersPure.TableT;\nimport haxe.Int32;\nimport haxe.Int64;\nimport haxe.io.UInt8Array;\nimport haxe.io.UInt16Array;\nimport haxe.io.Int32Array;\n#if js\nimport flatbuffers.io.Float32Array;\nimport flatbuffers.io.Float64Array;\n#else\nimport haxe.io.Float32Array;\nimport haxe.io.Float64Array;\n#end\nimport haxe.ds.Either;';
+	}
+
+	function convertNamespace(decl:FbsDeclaration):String {
+		// Haxe package paths must be lower case.
+		var namespace:String = (cast decl.getParameters()[0]:Array<String>).map(function(s:String) {
+			return s.charAt(0).toLowerCase() + s.substr(1);
+		}).join(".");
+		return 'package ${namespace};';
 	}
 
 	// Convert Enums.
 
 	function convertEnum(decl:FbsDeclaration):TypeDefinition {
-		var enumObj:FbsEnum = cast decl.getParameters()[0];
+		var enumObj:FbsEnum = decl.getParameters()[0];
 		var fields:Array<Field> = enumObj.ctors.map(function(ctor:FbsEnumCtor):Field {
 			var i:Int = 0;
 			if (ctor.value != null) {
@@ -247,7 +254,6 @@ class Converter {
 	function convertTable(decl:FbsDeclaration):TypeDefinition {
 		var structObj:FbsTable = decl.getParameters()[0];
 		var fieldsLength:Int = structObj.fields.length;
-
 		var vtable_offset:Int = 2;
 		var funcFields:Array<Field> = structObj.fields.map(function(field:FbsTableField) {
 			var retExpr:Expr;
@@ -424,8 +430,10 @@ class Converter {
 
 	// Convert Root Type.
 
-	function convertRootType(decl:FbsDeclaration):TypeDefinition {
-		return null;
+	function convertRootType(decl:FbsDeclaration):String {
+		var structObj:Array<String> = decl.getParameters()[0];
+		trace(structObj);
+		return structObj[0];
 	}
 
 	// Utils.
