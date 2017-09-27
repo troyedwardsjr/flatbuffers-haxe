@@ -652,7 +652,7 @@ class ByteBuffer
 		return t;
 	}
 
-	public function __string(offset:Int, opt_encoding:Int):String
+	public function __string(offset:Int, ?opt_encoding:Int):String
 	{
 		offset += this.readInt32(offset);
 
