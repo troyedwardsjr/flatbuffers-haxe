@@ -200,10 +200,11 @@ class Parser extends hxparse.Parser<hxparse.LexerTokenSource<FbsToken>, FbsToken
 			switch stream {
 				case [{def: TRBrace}]: break;
 				case [{def: TComment(s)}]:
-				case [{def: TIdent(s)}, {def: TColon}, t = typeVector([]), tn = tableNext()]: 
+				case [{def: TIdent(s)}, {def: TColon}, t = typeVector(), tn = tableNext()]: 
 					arr.push({
 						name: s,
-						type: t,
+						type: t.type,
+						isVector: t.isVector,
 						defaultValue: tn
 					});
 			}
@@ -252,21 +253,22 @@ class Parser extends hxparse.Parser<hxparse.LexerTokenSource<FbsToken>, FbsToken
 		}
 	}
 
-	function typeVector(arr:Array<FbsType>):Array<FbsType> {
+	function typeVector():{type:FbsType, isVector:Bool} {
 		return switch stream {
-			case [{def: TLBrack}, t = typeNext(arr)]: arr = t;
-			case [t = type()]: [t]; 
+			case [{def: TLBrack}, t = typeNext()]: {type: t, isVector: true};
+			case [t = type()]: {type: t, isVector: false}; 
 		}
 	}
 
-	function typeNext(arr:Array<FbsType>):Array<FbsType> {
+	function typeNext():FbsType {
+		var fieldType:Null<FbsType> = null;
 		while (true) {
 			switch stream {
-				case [t = type()]: arr.push(t);
+				case [t = type()]: fieldType = t;
 				case [{def: TRBrack}]: break;
 			}
 		}
-		return arr;
+		return fieldType;
 	}
 
 }

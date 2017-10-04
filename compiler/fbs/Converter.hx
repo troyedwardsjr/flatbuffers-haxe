@@ -14,7 +14,13 @@ typedef HaxeModule = {
 	className: String,
 	toplevel: Array<String>,
 	types: Array<TypeDefinition>,
-	declTypeRef: Map<String, FbsDeclaration>
+	declTypeRef: Map<String, FbsDeclaration>,
+	structSizeRef: Map<String, StructSize>
+}
+
+typedef StructSize = {
+	minAlign:Int,
+	finalSize:Int,
 }
 
 typedef FieldType = {
@@ -29,7 +35,7 @@ class Converter {
 	var currentModule:HaxeModule;
 
 	public function new() {
-		currentModule = {className: "", types: [], toplevel: [], declTypeRef: new Map<String, FbsDeclaration>()};
+		currentModule = {className: "", types: [], toplevel: [], declTypeRef: new Map<String, FbsDeclaration>(), structSizeRef: new Map<String, StructSize>()};
 	}
 
 	public function convert(parsedObj:ParsedObject):HaxeModule {
@@ -249,13 +255,14 @@ class Converter {
 		expr.unshift(makeExpr(
 			ECall(makeIdent('builder.prep'), [makeIdent(Std.string(minAlign)), makeIdent(Std.string(finalSize))])
 		));
-		
 		// return builder.offset();
 		expr.push(makeExpr(
 			EReturn(makeExpr(
 				ECall(makeIdent('builder.offset'), [])
 			))
 		));
+
+		currentModule.structSizeRef.set(structObj.name, {minAlign: minAlign, finalSize: finalSize});
 
 		return {
 				name: 'create${structObj.name}',
@@ -283,17 +290,20 @@ class Converter {
 	function convertTable(decl:FbsDeclaration):TypeDefinition {
 		var structObj:FbsTable = decl.getParameters()[0];
 		var fieldsLength:Int = structObj.fields.length;
+		
 		var args:Array<FunctionArg> = [];
 		var defaultRet:Expr = makeIdent('null');
 		var vtable_offset:Int = 2;
-		var funcFields:Array<Field> = structObj.fields.map(function(field:FbsTableField) {
+
+		var funcFields:Array<Array<Field>> = structObj.fields.map(function(field:FbsTableField) {
 			var retExpr:Expr;
 			var fieldType:FieldType;
+								var elem_size:Int = 0;
 			defaultRet = makeIdent('null');
 			args = [];
-			switch (field.type[0]) {
+			switch (field.type) {
 				case TPrimitive(t): 
-					fieldType = convertType(field.type[0].getParameters()[0]);
+					fieldType = convertType(field.type.getParameters()[0]);
 					switch(fieldType.alias) {
 						case "String":
 							fieldType.alias = "__string";
@@ -302,11 +312,20 @@ class Converter {
 						default:
 							fieldType.alias = 'read' + fieldType.alias;
 					}
-					retExpr = makeExpr(EReturn(
-						makeExpr(ETernary(
-							makeIdent('offset != 0'), makeIdent('this.bb.${fieldType.alias}(this.bb_pos + offset)'), makeIdent(fieldType.defaultVal)
-						))
-					));
+					if(field.isVector) {
+						args.unshift(makeFuncArg("index", makeType('Int')));
+						retExpr = makeExpr(EReturn(
+							makeExpr(ETernary(
+								makeIdent('offset != 0'), makeIdent('this.bb.${fieldType.alias}(this.bb.__vector(this.bb_pos + offset) + index * ${fieldType.memSize})'), makeIdent("0") //TODO
+							))
+						));
+					} else {
+						retExpr = makeExpr(EReturn(
+							makeExpr(ETernary(
+								makeIdent('offset != 0'), makeIdent('this.bb.${fieldType.alias}(this.bb_pos + offset)'), makeIdent(fieldType.defaultVal)
+							))
+						));
+					}
 				case TComposite(t): 
 					fieldType = {type: makeType(t), alias: t, memSize: 0, defaultVal: '0'};
 					var retCall:Expr = makeIdent('(obj != null ? obj : new ${t}()).__init(this.bb_pos + offset, this.bb)');
@@ -319,37 +338,160 @@ class Converter {
 						case DUnion(p):
 						case DStruct(p):
 							args = [makeFuncArg("obj", makeType('Null<${t}>'))];
+							elem_size = currentModule.structSizeRef[p.name].finalSize;
 						case DTable(p):
 							args = [makeFuncArg("obj", makeType('Null<${t}>'))];
 							retCall = makeIdent('(obj != null ? obj : new ${t}()).__init(this.bb.__indirect(this.bb_pos + offset), this.bb)');
 						default:
 					}
-					retExpr = makeExpr(EReturn(
-						makeExpr(ETernary(
-							makeIdent('offset != 0'), retCall, defaultRet
-						))
-					));
+					if(field.isVector) {
+						retCall = makeIdent('(obj != null ? obj : new ${t}()).__init(this.bb.__vector(this.bb_pos + offset) + index * ${elem_size}, this.bb)');
+						args.unshift(makeFuncArg("index", makeType('Int')));
+						retExpr = makeExpr(EReturn(
+							makeExpr(ETernary(
+								makeIdent('offset != 0'), retCall, defaultRet
+							))
+						));
+					} else {
+						retExpr = makeExpr(EReturn(
+							makeExpr(ETernary(
+								makeIdent('offset != 0'), retCall, defaultRet
+							))
+						));
+					}
 			}
 			
-
 			vtable_offset += 2;
-			return {
-				name: field.name,
-				kind: FFun({
-					args: args,
-					ret: makeType('Null', null, [TPType(fieldType.type)]),
-					expr: makeExpr(EBlock([
-						makeExpr(makeVar(
-							'offset', makeType('Null<Int>'), makeIdent('this.bb.__offset(this.bb_pos, ${vtable_offset})')
-						)),
-						retExpr
-					])),
-					params: null
-				}),
-				doc: null,
-				meta: [],
-				access: [APublic],
-				pos: nullPos
+			if(field.isVector) {
+				var vecFieldArray:Array<Field>;
+				vecFieldArray = [{
+					name: field.name,
+					kind: FFun({
+						args: args,
+						ret: makeType('Null', null, [TPType(fieldType.type)]),
+						expr: makeExpr(EBlock([
+							makeExpr(makeVar(
+								'offset', makeType('Null<Int>'), makeIdent('this.bb.__offset(this.bb_pos, ${vtable_offset})')
+							)),
+							retExpr
+						])),
+						params: null
+					}),
+					doc: null,
+					meta: [],
+					access: [APublic],
+					pos: nullPos
+				},
+				{
+					name: '${field.name}Length',
+					kind: FFun({
+						args: [],
+						ret: makeType('Null', null, [TPType(fieldType.type)]),
+						expr: makeExpr(EBlock([
+							makeExpr(makeVar(
+								'offset', makeType('Null<Int>'), makeIdent('this.bb.__offset(this.bb_pos, ${vtable_offset})')
+							)),
+							makeExpr(EReturn(
+								makeExpr(ETernary(
+									makeIdent('offset != 0'), makeIdent('this.bb.__vector_len(this.bb_pos + offset)'), makeIdent(fieldType.defaultVal)
+								))
+							))
+						])),
+						params: null
+					}),
+					doc: null,
+					meta: [],
+					access: [APublic],
+					pos: nullPos
+				}];
+				switch field.type {
+					case TPrimitive(t):
+						var typeAlias:String = convertType(t).alias;
+							switch typeAlias {
+								case "Int8":
+									typeAlias = "U" + typeAlias;
+								case "Int16":
+									typeAlias = "U" + typeAlias;
+								default:
+							}
+						vecFieldArray.push({
+							name: '${field.name}Array',
+							kind: FFun({
+								args: [],
+								ret: makeType('Null', null, [TPType(fieldType.type)]),
+								expr: makeExpr(EBlock([
+									makeExpr(makeVar(
+										'offset', makeType('Null<Int>'), makeIdent('this.bb.__offset(this.bb_pos, ${vtable_offset})')
+									)),
+									makeExpr(EReturn(
+										makeExpr(ETernary(
+											makeIdent('offset != 0'), makeIdent('${typeAlias}Array.fromBytes(this.bb.bytes().view.buffer, this.bb.bytes().view.byteOffset + this.bb.__vector(this.bb_pos + offset), this.bb.__vector_len(this.bb_pos + offset))'), makeIdent(fieldType.defaultVal)
+										))
+									))
+								])),
+								params: null
+							}),
+							doc: null,
+							meta: [],
+							access: [APublic],
+							pos: nullPos
+						});
+					case TComposite(t):
+						switch currentModule.declTypeRef[t] {
+							case DEnum(p):
+								var typeAlias:String = convertType(p.type.getParameters()[0]).alias;
+								switch typeAlias {
+									case "Int8":
+										typeAlias = "U" + typeAlias;
+									case "Int16":
+										typeAlias = "U" + typeAlias;
+									default:
+								}
+								vecFieldArray.push({
+								name: '${field.name}Array',
+								kind: FFun({
+									args: [],
+									ret: makeType('Null', null, [TPType(fieldType.type)]),
+									expr: makeExpr(EBlock([
+										makeExpr(makeVar(
+											'offset', makeType('Null<Int>'), makeIdent('this.bb.__offset(this.bb_pos, ${vtable_offset})')
+										)),
+										makeExpr(EReturn(
+											makeExpr(ETernary(
+												makeIdent('offset != 0'), makeIdent('${typeAlias}Array.fromBytes(this.bb.bytes().view.buffer, this.bb.bytes().view.byteOffset + this.bb.__vector(this.bb_pos + offset), this.bb.__vector_len(this.bb_pos + offset))'), makeIdent(fieldType.defaultVal)
+											))
+										))
+									])),
+									params: null
+								}),
+								doc: null,
+								meta: [],
+								access: [APublic],
+								pos: nullPos
+							});
+							default:
+						}
+				}
+				return vecFieldArray;
+			} else {
+				return [{
+					name: field.name,
+					kind: FFun({
+						args: args,
+						ret: makeType('Null', null, [TPType(fieldType.type)]),
+						expr: makeExpr(EBlock([
+							makeExpr(makeVar(
+								'offset', makeType('Null<Int>'), makeIdent('this.bb.__offset(this.bb_pos, ${vtable_offset})')
+							)),
+							retExpr
+						])),
+						params: null
+					}),
+					doc: null,
+					meta: [],
+					access: [APublic],
+					pos: nullPos
+				}];
 			}
 		});
 
@@ -372,22 +514,37 @@ class Converter {
 			pos: nullPos
 		}
 		
-		var funcAddFields:List<Field> = structObj.fields.mapi(function(i:Int, field:FbsTableField) {
+		var funcAddFields:List<Array<Field>> = structObj.fields.mapi(function(i:Int, field:FbsTableField) {
 			var fieldType:FieldType;
 			var expr:Expr;
 			var fieldName:String = field.name; // Field name to have "Offset" added if needed.
 			
-			switch (field.type[0]) {
+			switch (field.type) {
 				case TPrimitive(t): 
-					fieldType = convertType(field.type[0].getParameters()[0]);
-					switch(fieldType.alias) {
-						case "String":
+					fieldType = convertType(field.type.getParameters()[0]);
+					if(!field.isVector) {
+						switch((cast field.type.getParameters()[0]:FbsPrimitiveType)) {
+							case TByte: 
+								fieldName += " ? 1 : 0";
+							case TUByte: 
+								fieldName += " ? 1 : 0";
+							case TLong: 
+								fieldType.defaultVal = "builder.createLong(0, 0)";
+							case TULong:
+								fieldType.defaultVal = "builder.createLong(0, 0)";
+							case TString: 
+								fieldName += "Offset";
+								fieldType.alias = "Offset";
+								fieldType.type = makeType("Offset");
+								fieldType.defaultVal = "0";
+							default:
+						}
+					} else {
+						if(!~/Offset/i.match(fieldName)) {
 							fieldName += "Offset";
 							fieldType.alias = "Offset";
 							fieldType.type = makeType("Offset");
-							fieldType.defaultVal = "0";
-						case "Int64":
-							fieldType.defaultVal = "builder.createLong(0, 0)";
+						}
 					}
 					expr = makeExpr(EBlock([
 						makeExpr(ECall(
@@ -398,20 +555,28 @@ class Converter {
 				case TComposite(t): 
 					fieldType = {type: makeType(t), alias: "Offset", memSize: 0, defaultVal: "0"};
 					// Figure out type of composite by searching the current modules decleration type reference map for the type.
-					switch currentModule.declTypeRef[t] {
-						case DEnum(p):
-							fieldType.alias = convertType(p.type.getParameters()[0]).alias;
-							// Maybe use unsafe cast instead of .getIndex() since it's an abstract.
-							fieldType.defaultVal = '${t}.${p.ctors[0].name.getParameters()[0]}.getIndex()';
-						case DUnion(p):
-						case DStruct(p):
-							fieldType.type = makeType("Offset");
-							fieldType.alias = "Struct";
+					if(!field.isVector) {
+						switch currentModule.declTypeRef[t] {
+							case DEnum(p):
+								fieldType.alias = convertType(p.type.getParameters()[0]).alias;
+								// Maybe use unsafe cast instead of .getIndex() since it's an abstract.
+								fieldType.defaultVal = '${t}.${p.ctors[0].name.getParameters()[0]}.getIndex()';
+							case DUnion(p):
+							case DStruct(p):
+								fieldType.type = makeType("Offset");
+								fieldType.alias = "Struct";
+								fieldName += "Offset";
+							case DTable(p):
+								fieldType.type = makeType("Offset");
+								fieldName += "Offset";
+							default:
+						}
+					} else {
+						if(!~/Offset/i.match(fieldName)) {
 							fieldName += "Offset";
-						case DTable(p):
+							fieldType.alias = "Offset";
 							fieldType.type = makeType("Offset");
-							fieldName += "Offset";
-						default:
+						}
 					}
 					expr = makeExpr(EBlock([
 						makeExpr(ECall(
@@ -421,7 +586,8 @@ class Converter {
 					]));
 			}
 
-			return {
+			var addFieldArray:Array<Field>;
+			addFieldArray = [{
 				name: 'add${field.name.charAt(0).toUpperCase() + field.name.substr(1)}',
 				kind: FFun({
 					args: [makeFuncArg("builder", makeType("Builder")), makeFuncArg(fieldName, fieldType.type)],
@@ -433,7 +599,87 @@ class Converter {
 				meta: [],
 				access: [APublic, AStatic],
 				pos: nullPos
+			}];
+			if(field.isVector) {
+				// elem_size: The size of each element in the array.
+				var elem_size:String = "";
+				// num_elems: The number of elements in the array
+				var num_elems:String = "";
+				// Skip create field if struct or table.
+				var skipCreate:Bool = false;
+
+				switch(field.type) {
+					case TComposite(t):
+						switch currentModule.declTypeRef[t] {
+							case DEnum(p):
+								// Size of enum underlying type.
+								elem_size = Std.string(convertType(p.type.getParameters()[0]).memSize);
+								num_elems = "0";
+								fieldType.memSize = convertType(p.type.getParameters()[0]).memSize;
+								fieldType.alias = convertType(p.type.getParameters()[0]).alias;
+							case DUnion(p):
+							case DStruct(p):
+								// Combined size of all fields in struct.
+								elem_size = Std.string(currentModule.structSizeRef[p.name].finalSize);
+								num_elems = Std.string(currentModule.structSizeRef[p.name].minAlign);
+								skipCreate = true;
+							case DTable(p):
+							default: 
+						}
+					case TPrimitive(t):
+						trace(t);
+						switch t {
+							case TString:
+								fieldType.alias = "Offset";
+							default:
+								fieldType.alias = convertType(t).alias;
+						}
+						elem_size = Std.string(fieldType.memSize);
+						num_elems = Std.string(fieldType.memSize);
+				}
+				if(!skipCreate) {
+					addFieldArray.push({
+							name: 'create${field.name.charAt(0).toUpperCase() + field.name.substr(1)}Vector',
+							kind: FFun({
+								args: [makeFuncArg("builder", makeType("Builder")), makeFuncArg(fieldName, fieldType.type)],
+								ret: makeType('Void'),
+								expr: makeExpr(EBlock([
+									makeExpr(ECall(
+										makeIdent('builder.startVector'), 
+										[makeIdent(Std.string(fieldType.memSize)), makeIdent(fieldName), makeIdent(Std.string(fieldType.memSize))]
+									)),
+									makeIdent('var i:Int = data.length - 1'),
+									makeIdent('while (i >= 0) { builder.add${fieldType.alias}(data[i]); i--; }'),
+									makeIdent('return builder.endVector()')
+								])),
+								params: null
+							}),
+							doc: null,
+							meta: [],
+							access: [APublic, AStatic],
+							pos: nullPos
+					});
+				}
+				addFieldArray.push({
+					name: 'start${field.name.charAt(0).toUpperCase() + field.name.substr(1)}Vector',
+					kind: FFun({
+						args: [makeFuncArg("builder", makeType("Builder")), makeFuncArg("numElems", makeType("Int"))],
+						ret: makeType('Void'),
+						expr: makeExpr(EBlock([
+							makeExpr(ECall(
+								makeIdent('builder.addField${fieldType.alias}'), 
+								[makeIdent(elem_size), makeIdent("numElems"), makeIdent(num_elems)]
+							))
+						])),
+						params: null
+					}),
+					doc: null,
+					meta: [],
+					access: [APublic, AStatic],
+					pos: nullPos
+				});
 			}
+			return addFieldArray;
 		});
 		
 		var funcEndFields:Field = {
@@ -462,9 +708,9 @@ class Converter {
 			[makeCon()], 
 			[makeInitFunc(structObj.name)],
 			[convertTableGetRoot(structObj)],
-			funcFields,
+			Lambda.flatten(funcFields),
 			[funcStartFields],
-			funcAddFields,
+			Lambda.flatten(funcAddFields),
 			[funcEndFields]
 		]));
 		
@@ -523,7 +769,7 @@ class Converter {
 			case TLong: {type: makeType("Long"), alias: "Int64", memSize: 8, defaultVal: "0"}; // Int64
 			case TULong: {type: makeType("Long"), alias: "Int64", memSize: 8, defaultVal: "0"}; // Int64
 			case TDouble: {type: makeType("Float"), alias: "Float64", memSize: 8, defaultVal: "0.0"}; // Float64
-			case TString: {type: makeType("String"), alias: "String", memSize: 8, defaultVal: "null"}; // String
+			case TString: {type: makeType("String"), alias: "String", memSize: 4, defaultVal: "null"}; // String
 		}
 	}
 

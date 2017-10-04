@@ -59,7 +59,8 @@ typedef FbsTable = {
 
 typedef FbsTableField = {
 	name: String,
-	type: Array<FbsType>,
+	type: FbsType,
+	isVector: Bool,
 	defaultValue: Null<String>
 }
 
