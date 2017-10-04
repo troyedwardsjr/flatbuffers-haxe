@@ -12,8 +12,9 @@ using Lambda;
 
 typedef HaxeModule = {
 	className: String,
+	toplevel: Array<String>,
 	types: Array<TypeDefinition>,
-	toplevel: Array<String>
+	declTypeRef: Map<String, FbsDeclaration>
 }
 
 typedef FieldType = {
@@ -28,10 +29,11 @@ class Converter {
 	var currentModule:HaxeModule;
 
 	public function new() {
-		currentModule = {className: "", types: [], toplevel: []};
+		currentModule = {className: "", types: [], toplevel: [], declTypeRef: new Map<String, FbsDeclaration>()};
 	}
 
 	public function convert(parsedObj:ParsedObject):HaxeModule {
+		storeDeclTypes(parsedObj);
 		parsedObj.namespaces.map(function(decl:FbsDeclaration) {
 			currentModule.toplevel.push(convertNamespace(decl));
 		});
@@ -49,7 +51,34 @@ class Converter {
 			currentModule.className = convertRootType(decl);
 		});
 
+		var printer:haxe.macro.Printer = new haxe.macro.Printer();
+		currentModule.types.map(function(t) {
+			trace(printer.printTypeDefinition(t));
+		});
+
 		return currentModule;
+	}
+
+	function storeDeclTypes(parsedObj:ParsedObject):Void {
+		for(field in Reflect.fields(parsedObj)) {
+			Reflect.field(parsedObj, field);
+			(cast Reflect.field(parsedObj, field):Array<Dynamic>).map(function(decl:FbsDeclaration) {
+				switch decl {
+					case DNamespace(p):
+						currentModule.declTypeRef.set(p[p.length - 1], decl);
+					case DEnum(p):
+						currentModule.declTypeRef.set(p.name, decl);
+					case DUnion(p):
+						currentModule.declTypeRef.set(p.name, decl);
+					case DStruct(p):
+						currentModule.declTypeRef.set(p.name, decl);
+					case DTable(p):
+						currentModule.declTypeRef.set(p.name, decl);
+					case DRootType(p):
+						currentModule.declTypeRef.set(p[p.length - 1], decl);
+				}	
+			});
+		}
 	}
 
 	function convertImport():String
@@ -254,10 +283,14 @@ class Converter {
 	function convertTable(decl:FbsDeclaration):TypeDefinition {
 		var structObj:FbsTable = decl.getParameters()[0];
 		var fieldsLength:Int = structObj.fields.length;
+		var args:Array<FunctionArg> = [];
+		var defaultRet:Expr = makeIdent('null');
 		var vtable_offset:Int = 2;
 		var funcFields:Array<Field> = structObj.fields.map(function(field:FbsTableField) {
 			var retExpr:Expr;
 			var fieldType:FieldType;
+			defaultRet = makeIdent('null');
+			args = [];
 			switch (field.type[0]) {
 				case TPrimitive(t): 
 					fieldType = convertType(field.type[0].getParameters()[0]);
@@ -276,9 +309,24 @@ class Converter {
 					));
 				case TComposite(t): 
 					fieldType = {type: makeType(t), alias: t, memSize: 0, defaultVal: '0'};
+					var retCall:Expr = makeIdent('(obj != null ? obj : new ${t}()).__init(this.bb_pos + offset, this.bb)');
+					// Figure out type of composite by searching the current modules decleration type reference map for the type.
+					switch currentModule.declTypeRef[t] {
+						case DEnum(p):
+							retCall = makeIdent('(this.bb.read${convertType(p.type.getParameters()[0]).alias}(this.bb_pos + offset))');
+							// Maybe use unsafe cast instead of .getIndex() since it's an abstract.
+							defaultRet = makeIdent('${t}.${p.ctors[0].name.getParameters()[0]}.getIndex()');
+						case DUnion(p):
+						case DStruct(p):
+							args = [makeFuncArg("obj", makeType('Null<${t}>'))];
+						case DTable(p):
+							args = [makeFuncArg("obj", makeType('Null<${t}>'))];
+							retCall = makeIdent('(obj != null ? obj : new ${t}()).__init(this.bb.__indirect(this.bb_pos + offset), this.bb)');
+						default:
+					}
 					retExpr = makeExpr(EReturn(
 						makeExpr(ETernary(
-							makeIdent('offset != 0'), makeIdent('(obj != null ? obj.__init(this.bb_pos + offset, this.bb) : new ${t}().__init(this.bb_pos + offset, this.bb))'), makeIdent('null')
+							makeIdent('offset != 0'), retCall, defaultRet
 						))
 					));
 			}
@@ -288,7 +336,7 @@ class Converter {
 			return {
 				name: field.name,
 				kind: FFun({
-					args: [],
+					args: args,
 					ret: makeType('Null', null, [TPType(fieldType.type)]),
 					expr: makeExpr(EBlock([
 						makeExpr(makeVar(
@@ -326,7 +374,9 @@ class Converter {
 		
 		var funcAddFields:List<Field> = structObj.fields.mapi(function(i:Int, field:FbsTableField) {
 			var fieldType:FieldType;
+			var expr:Expr;
 			var fieldName:String = field.name; // Field name to have "Offset" added if needed.
+			
 			switch (field.type[0]) {
 				case TPrimitive(t): 
 					fieldType = convertType(field.type[0].getParameters()[0]);
@@ -339,8 +389,36 @@ class Converter {
 						case "Int64":
 							fieldType.defaultVal = "builder.createLong(0, 0)";
 					}
+					expr = makeExpr(EBlock([
+						makeExpr(ECall(
+							makeIdent('builder.addField${fieldType.alias}'), 
+							[makeIdent(Std.string(i)), makeIdent(fieldName), makeIdent(fieldType.defaultVal)]
+						))
+					]));
 				case TComposite(t): 
 					fieldType = {type: makeType(t), alias: "Offset", memSize: 0, defaultVal: "0"};
+					// Figure out type of composite by searching the current modules decleration type reference map for the type.
+					switch currentModule.declTypeRef[t] {
+						case DEnum(p):
+							fieldType.alias = convertType(p.type.getParameters()[0]).alias;
+							// Maybe use unsafe cast instead of .getIndex() since it's an abstract.
+							fieldType.defaultVal = '${t}.${p.ctors[0].name.getParameters()[0]}.getIndex()';
+						case DUnion(p):
+						case DStruct(p):
+							fieldType.type = makeType("Offset");
+							fieldType.alias = "Struct";
+							fieldName += "Offset";
+						case DTable(p):
+							fieldType.type = makeType("Offset");
+							fieldName += "Offset";
+						default:
+					}
+					expr = makeExpr(EBlock([
+						makeExpr(ECall(
+							makeIdent('builder.addField${fieldType.alias}'), 
+							[makeIdent(Std.string(i)), makeIdent(fieldName), makeIdent(fieldType.defaultVal)]
+						))
+					]));
 			}
 
 			return {
@@ -348,12 +426,7 @@ class Converter {
 				kind: FFun({
 					args: [makeFuncArg("builder", makeType("Builder")), makeFuncArg(fieldName, fieldType.type)],
 					ret: makeType('Void'),
-					expr: makeExpr(EBlock([
-						makeExpr(ECall(
-							makeIdent('builder.addField${fieldType.alias}'), 
-							[makeIdent(Std.string(i)), makeIdent(fieldName), makeIdent(fieldType.defaultVal)]
-						))
-					])),
+					expr: expr,
 					params: null
 				}),
 				doc: null,
@@ -362,6 +435,7 @@ class Converter {
 				pos: nullPos
 			}
 		});
+		
 		var funcEndFields:Field = {
 			name: 'end${structObj.name}',
 			kind: FFun({
@@ -432,7 +506,6 @@ class Converter {
 
 	function convertRootType(decl:FbsDeclaration):String {
 		var structObj:Array<String> = decl.getParameters()[0];
-		trace(structObj);
 		return structObj[0];
 	}
 
