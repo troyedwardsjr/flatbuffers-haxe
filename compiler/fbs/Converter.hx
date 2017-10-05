@@ -104,14 +104,16 @@ class Converter {
 
 	function convertEnum(decl:FbsDeclaration):TypeDefinition {
 		var enumObj:FbsEnum = decl.getParameters()[0];
-		var fields:Array<Field> = enumObj.ctors.map(function(ctor:FbsEnumCtor):Field {
-			var i:Int = 0;
+		var fields:List<Field> = enumObj.ctors.mapi(function(i:Int, ctor:FbsEnumCtor):Field {
+			var fieldVal = 0;
 			if (ctor.value != null) {
-				i = Std.parseInt(ctor.value);
+				fieldVal = Std.parseInt(ctor.value);
+			} else {
+				fieldVal = i;
 			}
 			return {
 				name: ctor.name.getParameters()[0],
-				kind: FVar(null, { expr: EConst(CInt("" +i++)), pos: nullPos }),
+				kind: FVar(null, { expr: EConst(CInt(Std.string(fieldVal))), pos: nullPos }),
 				doc: null,
 				meta: [],
 				access: [],
@@ -126,7 +128,7 @@ class Converter {
 			params: [],
 			isExtern: false,
 			kind: TDAbstract(makeType("Int")),
-			fields: fields 
+			fields: Lambda.array(fields) 
 		}
 	}
 
@@ -331,7 +333,7 @@ class Converter {
 				}),
 				doc: null,
 				meta: [],
-				access: [APublic],
+				access: [APublic, AStatic],
 				pos: nullPos
 		};
 	}
