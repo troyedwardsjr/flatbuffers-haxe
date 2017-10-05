@@ -243,8 +243,7 @@ class Converter {
 			}
 			return makeFuncArg(field.name, fieldType.type);
 		});
-		args.push(makeFuncArg("builder", makeType("Builder")));
-		args.reverse();
+		args.unshift(makeFuncArg("builder", makeType("Builder")));
 
 		var memSizeList:Array<Int> = structObj.fields.map(function(field:FbsStructField) {
 			switch field.type {
