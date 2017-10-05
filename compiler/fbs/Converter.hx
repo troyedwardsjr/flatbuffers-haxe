@@ -134,9 +134,25 @@ class Converter {
 
 	function convertStruct(decl:FbsDeclaration):TypeDefinition {
 		var structObj:FbsStruct = decl.getParameters()[0];
+		trace(structObj);
 		var index = {i: 0, offset: 0};
 		var funcFields:Array<Field> = structObj.fields.map(function(field:FbsStructField) {
-			var fieldType:FieldType = convertType(field.type.getParameters()[0]);
+			var fieldType:FieldType;
+			switch field.type {
+				case TPrimitive(t): 
+					fieldType = convertType(field.type.getParameters()[0]);
+				case TComposite(t):
+					fieldType = {type: makeType(t), alias: t, memSize: 0, defaultVal: '0'};
+					switch currentModule.declTypeRef[t] {
+						case DEnum(p):
+							fieldType.alias = convertType(p.type.getParameters()[0]).alias;
+							fieldType.memSize = convertType(p.type.getParameters()[0]).memSize;
+						case DUnion(p):
+						case DStruct(p):
+						case DTable(p):
+						default:
+					}
+			}
 			return {
 				name: field.name,
 				kind: FFun({
@@ -189,26 +205,51 @@ class Converter {
 		}
 		index.offset = index.offset + fieldType.memSize;
 
-		return makeExpr(EReturn(
-				makeExpr(EBlock([
-					makeExpr(ECall(
-							makeIdent('this.bb.read${fieldType.alias}'), 
-							args
-					))
-				]))
-		));	
+		return makeExpr(EBlock([
+			makeExpr(EReturn(
+				makeExpr(ECall(
+						makeIdent('this.bb.read${fieldType.alias}'), 
+						args
+				))
+			))
+		]));	
 	}
 
 	function convertStructCreate(structObj:FbsStruct):Field {
+		var fieldType:FieldType;
 		var args:Array<FunctionArg> = structObj.fields.map(function(field:FbsStructField) {
-			var fieldType:FieldType = convertType(field.type.getParameters()[0]);
+			switch field.type {
+				case TPrimitive(t): 
+					fieldType = convertType(field.type.getParameters()[0]);
+				case TComposite(t):
+					fieldType = {type: makeType(t), alias: t, memSize: 0, defaultVal: '0'};
+					switch currentModule.declTypeRef[t] {
+						case DEnum(p):
+							fieldType.alias = convertType(p.type.getParameters()[0]).alias;
+							fieldType.memSize = convertType(p.type.getParameters()[0]).memSize;
+						case DUnion(p):
+						case DStruct(p):
+						case DTable(p):
+						default:
+					}
+			}
 			return makeFuncArg(field.name, fieldType.type);
 		});
 		args.push(makeFuncArg("builder", makeType("Builder")));
 		args.reverse();
 
 		var memSizeList:Array<Int> = structObj.fields.map(function(field:FbsStructField) {
-			return convertType(field.type.getParameters()[0]).memSize;
+			switch field.type {
+				case TPrimitive(t): 
+					return convertType(field.type.getParameters()[0]).memSize;
+				case TComposite(t):
+					switch currentModule.declTypeRef[t] {
+						case DEnum(p):
+							return convertType(p.type.getParameters()[0]).memSize;
+						default:
+							return null;
+					}
+			}
 		});
 		var minAlign:Int = memSizeList.fold(function(a:Int, b:Int) {
 			return Std.int(Math.max(a, b));
@@ -221,7 +262,22 @@ class Converter {
 		var byteIndex:Int = 0;
 
 		for (i in 0...structObj.fields.length) {
-			var fieldType:FieldType = convertType(structObj.fields[i].type.getParameters()[0]);
+			var fieldType:FieldType;
+			switch (cast structObj.fields[i].type:FbsType) {
+				case TPrimitive(t): 
+					fieldType = convertType(structObj.fields[i].type.getParameters()[0]);
+				case TComposite(t):
+					fieldType = {type: makeType(t), alias: t, memSize: 0, defaultVal: '0'};
+					switch currentModule.declTypeRef[t] {
+						case DEnum(p):
+							fieldType.alias = convertType(p.type.getParameters()[0]).alias;
+							fieldType.memSize = convertType(p.type.getParameters()[0]).memSize;
+						case DUnion(p):
+						case DStruct(p):
+						case DTable(p):
+						default:
+					}
+			}
 			var padding:Int = 0;
 		
 			if(fieldType.memSize + (byteIndex % minAlign) > minAlign) {
@@ -229,7 +285,6 @@ class Converter {
 				byteIndex += padding;
 			}
 			byteIndex += fieldType.memSize;
-
 			// Padding.
 			if(padding != 0) {
 				expr.unshift(makeExpr(
@@ -243,6 +298,8 @@ class Converter {
 		}
 
 		// Check if final buffer is divisible by minimum alignment (1, 2. 4 or 8), if not round up to the nearest divisible number.
+		trace(byteIndex);
+		trace(minAlign);
 		var finalSize:Int = Std.int(Math.ceil(byteIndex / minAlign) * minAlign);
 		var endPadding:Int = finalSize - byteIndex;
 		if(endPadding != 0) {
@@ -298,7 +355,7 @@ class Converter {
 		var funcFields:Array<Array<Field>> = structObj.fields.map(function(field:FbsTableField) {
 			var retExpr:Expr;
 			var fieldType:FieldType;
-								var elem_size:Int = 0;
+			var elem_size:Int = 0;
 			defaultRet = makeIdent('null');
 			args = [];
 			switch (field.type) {
@@ -627,7 +684,6 @@ class Converter {
 							default: 
 						}
 					case TPrimitive(t):
-						trace(t);
 						switch t {
 							case TString:
 								fieldType.alias = "Offset";
