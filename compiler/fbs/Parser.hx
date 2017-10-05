@@ -89,10 +89,9 @@ class Parser extends hxparse.Parser<hxparse.LexerTokenSource<FbsToken>, FbsToken
 	}
 	
 	function enumProps(arr:Array<FbsEnumCtor>):Array<FbsEnumCtor> {
-		var enumIndex:Int = 0;
 		while (true) {
 			switch stream {
-				case [{def: TIdent(s)}, val = enumNext(enumIndex)]: 
+				case [{def: TIdent(s)}, val = enumNext()]: 
 					arr.push({
 						name: TIdentifier(s),
 						value: val
@@ -103,17 +102,17 @@ class Parser extends hxparse.Parser<hxparse.LexerTokenSource<FbsToken>, FbsToken
 		return arr;
 	}
 
-	function enumNext(enumIndex:Int):String {
+	function enumNext():String {
 		return switch stream {
-			case [{def: TAssign}, {def: TNumber(v)}, close = enumClose(enumIndex)]: v;
-			case [close = enumClose(enumIndex)]: close;
+			case [{def: TAssign}, {def: TNumber(v)}, close = enumClose()]: v;
+			case [close = enumClose()]: close;
 		} 
 	}
 
-	function enumClose(enumIndex:Int):String {
+	function enumClose():String {
 		return switch stream {
-			case [{def: TRBrace}]: enumIndex++; Std.string(enumIndex);
-			case [{def: TComma}]: enumIndex++; Std.string(enumIndex);
+			case [{def: TRBrace}]: null;
+			case [{def: TComma}]: null;
 		} 
 	}
 

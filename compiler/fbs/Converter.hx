@@ -136,7 +136,7 @@ class Converter {
 
 	function convertStruct(decl:FbsDeclaration):TypeDefinition {
 		var structObj:FbsStruct = decl.getParameters()[0];
-		trace(structObj);
+		var enumCast:String = "";
 		var index = {i: 0, offset: 0};
 		var funcFields:Array<Field> = structObj.fields.map(function(field:FbsStructField) {
 			var fieldType:FieldType;
@@ -149,6 +149,7 @@ class Converter {
 						case DEnum(p):
 							fieldType.alias = convertType(p.type.getParameters()[0]).alias;
 							fieldType.memSize = convertType(p.type.getParameters()[0]).memSize;
+							enumCast = "cast ";
 						case DUnion(p):
 						case DStruct(p):
 						case DTable(p):
@@ -160,7 +161,7 @@ class Converter {
 				kind: FFun({
 					args: [],
 					ret: fieldType.type,
-					expr: convertStructRet(fieldType, index),
+					expr: convertStructRet(fieldType, index, enumCast),
 					params: null
 				}),
 				doc: null,
@@ -188,7 +189,7 @@ class Converter {
 		};
 	}
 
-	function convertStructRet(fieldType:FieldType, index:{i: Int, offset: Int}):Expr {
+	function convertStructRet(fieldType:FieldType, index:{i: Int, offset: Int}, enumCast:String):Expr {
 		var args:Array<Expr>;
 		var ident:String = "this.bb_pos";
 		index.i++;
@@ -210,7 +211,7 @@ class Converter {
 		return makeExpr(EBlock([
 			makeExpr(EReturn(
 				makeExpr(ECall(
-						makeIdent('this.bb.read${fieldType.alias}'), 
+						makeIdent('${enumCast}this.bb.read${fieldType.alias}'), 
 						args
 				))
 			))
@@ -262,7 +263,7 @@ class Converter {
 
 		var expr:Array<Expr> = [];
 		var byteIndex:Int = 0;
-
+		var enumCast:String = "";
 		for (i in 0...structObj.fields.length) {
 			var fieldType:FieldType;
 			switch (cast structObj.fields[i].type:FbsType) {
@@ -274,6 +275,7 @@ class Converter {
 						case DEnum(p):
 							fieldType.alias = convertType(p.type.getParameters()[0]).alias;
 							fieldType.memSize = convertType(p.type.getParameters()[0]).memSize;
+							enumCast = "cast ";
 						case DUnion(p):
 						case DStruct(p):
 						case DTable(p):
@@ -294,14 +296,12 @@ class Converter {
 				));
 			}
 			expr.unshift(makeExpr(
-				ECall(makeIdent('builder.write${fieldType.alias}'), [makeIdent(structObj.fields[i].name)])
+				ECall(makeIdent('builder.write${fieldType.alias}'), [makeIdent('${enumCast}${structObj.fields[i].name}')])
 			));
 
 		}
 
 		// Check if final buffer is divisible by minimum alignment (1, 2. 4 or 8), if not round up to the nearest divisible number.
-		trace(byteIndex);
-		trace(minAlign);
 		var finalSize:Int = Std.int(Math.ceil(byteIndex / minAlign) * minAlign);
 		var endPadding:Int = finalSize - byteIndex;
 		if(endPadding != 0) {
@@ -445,7 +445,7 @@ class Converter {
 					name: '${field.name}Length',
 					kind: FFun({
 						args: [],
-						ret: makeType('Null', null, [TPType(fieldType.type)]),
+						ret: makeType('Null', null, [TPType(makeType("Int"))]),
 						expr: makeExpr(EBlock([
 							makeExpr(makeVar(
 								'offset', makeType('Null<Int>'), makeIdent('this.bb.__offset(this.bb_pos, ${vtable_offset})')
