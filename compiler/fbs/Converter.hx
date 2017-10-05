@@ -15,12 +15,18 @@ typedef HaxeModule = {
 	toplevel: Array<String>,
 	types: Array<TypeDefinition>,
 	declTypeRef: Map<String, FbsDeclaration>,
-	structSizeRef: Map<String, StructSize>
+	structSizeRef: Map<String, StructSize>,
+	structPaddingRef: Map<String, StructPadding>
 }
 
 typedef StructSize = {
 	minAlign:Int,
-	finalSize:Int,
+	finalSize:Int
+}
+
+typedef StructPadding = {
+	byteIndex:Int,
+	padding:Int
 }
 
 typedef FieldType = {
@@ -35,7 +41,14 @@ class Converter {
 	var currentModule:HaxeModule;
 
 	public function new() {
-		currentModule = {className: "", types: [], toplevel: [], declTypeRef: new Map<String, FbsDeclaration>(), structSizeRef: new Map<String, StructSize>()};
+		currentModule = {
+			className: "", 
+			types: [], 
+			toplevel: [], 
+			declTypeRef: new Map<String, FbsDeclaration>(), 
+			structSizeRef: new Map<String, StructSize>(),
+			structPaddingRef: new Map<String, StructPadding>()
+		};
 	}
 
 	public function convert(parsedObj:ParsedObject):HaxeModule {
@@ -137,45 +150,46 @@ class Converter {
 	function convertStruct(decl:FbsDeclaration):TypeDefinition {
 		var structObj:FbsStruct = decl.getParameters()[0];
 		var enumCast:String = "";
-		var index = {i: 0, offset: 0};
-		var funcFields:Array<Field> = structObj.fields.map(function(field:FbsStructField) {
-			var fieldType:FieldType;
-			switch field.type {
-				case TPrimitive(t): 
-					fieldType = convertType(field.type.getParameters()[0]);
-				case TComposite(t):
-					fieldType = {type: makeType(t), alias: t, memSize: 0, defaultVal: '0'};
-					switch currentModule.declTypeRef[t] {
-						case DEnum(p):
-							fieldType.alias = convertType(p.type.getParameters()[0]).alias;
-							fieldType.memSize = convertType(p.type.getParameters()[0]).memSize;
-							enumCast = "cast ";
-						case DUnion(p):
-						case DStruct(p):
-						case DTable(p):
-						default:
-					}
-			}
-			return {
-				name: field.name,
-				kind: FFun({
-					args: [],
-					ret: fieldType.type,
-					expr: convertStructRet(fieldType, index, enumCast),
-					params: null
-				}),
-				doc: null,
-				meta: [],
-				access: [APublic],
-				pos: nullPos
-			}
-		});
+		var funcFields:haxe.Constraints.Function = function():Array<Field> {
+			return structObj.fields.map(function(field:FbsStructField) {
+				var fieldType:FieldType;
+				switch field.type {
+					case TPrimitive(t): 
+						fieldType = convertType(field.type.getParameters()[0]);
+						enumCast = "";
+					case TComposite(t):
+						fieldType = {type: makeType(t), alias: t, memSize: 0, defaultVal: '0'};
+						switch currentModule.declTypeRef[t] {
+							case DEnum(p):
+								fieldType.alias = convertType(p.type.getParameters()[0]).alias;
+								fieldType.memSize = convertType(p.type.getParameters()[0]).memSize;
+								enumCast = "cast ";
+							case DStruct(p):
+							default:
+								enumCast = "";
+						}
+				}
+				return {
+					name: field.name,
+					kind: FFun({
+						args: [],
+						ret: fieldType.type,
+						expr: convertStructRet(field, fieldType, enumCast),
+						params: null
+					}),
+					doc: null,
+					meta: [],
+					access: [APublic],
+					pos: nullPos
+				}
+			});
+		}
 		var allFields:Array<Field> = Lambda.array(Lambda.flatten([
 			makeBbVars(), 
 			[makeCon()], 
 			[makeInitFunc(structObj.name)],
-			funcFields, 
-			[convertStructCreate(structObj)]
+			[convertStructCreate(structObj)],
+			funcFields()
 		]));
 		return {
 			pack: [],
@@ -188,26 +202,19 @@ class Converter {
 			fields: allFields
 		};
 	}
-
-	function convertStructRet(fieldType:FieldType, index:{i: Int, offset: Int}, enumCast:String):Expr {
+	
+	function convertStructRet(field:FbsStructField, fieldType:FieldType, enumCast:String):Expr {
 		var args:Array<Expr>;
 		var ident:String = "this.bb_pos";
-		index.i++;
-		if (index.i > 1) {
-			args = [
-				makeExpr(
-					EBinop(
-						OpAdd, 
-						makeIdent(ident), 
-						makeInt(Std.string(index.offset))
-					) 
-				)
-			];
-		} else {
-			args = [ makeIdent(ident) ];
-		}
-		index.offset = index.offset + fieldType.memSize;
-
+		args = [
+			makeExpr(
+				EBinop(
+					OpAdd, 
+					makeIdent(ident), 
+					makeInt(Std.string(currentModule.structPaddingRef.get(field.name).byteIndex))
+				) 
+			)
+		];
 		return makeExpr(EBlock([
 			makeExpr(EReturn(
 				makeExpr(ECall(
@@ -230,9 +237,7 @@ class Converter {
 						case DEnum(p):
 							fieldType.alias = convertType(p.type.getParameters()[0]).alias;
 							fieldType.memSize = convertType(p.type.getParameters()[0]).memSize;
-						case DUnion(p):
 						case DStruct(p):
-						case DTable(p):
 						default:
 					}
 			}
@@ -269,6 +274,7 @@ class Converter {
 			switch (cast structObj.fields[i].type:FbsType) {
 				case TPrimitive(t): 
 					fieldType = convertType(structObj.fields[i].type.getParameters()[0]);
+					enumCast = "";
 				case TComposite(t):
 					fieldType = {type: makeType(t), alias: t, memSize: 0, defaultVal: '0'};
 					switch currentModule.declTypeRef[t] {
@@ -280,14 +286,25 @@ class Converter {
 						case DStruct(p):
 						case DTable(p):
 						default:
+						enumCast = "";
 					}
 			}
 			var padding:Int = 0;
-		
+			
 			if(fieldType.memSize + (byteIndex % minAlign) > minAlign) {
 				padding = (Math.ceil(byteIndex / minAlign) * minAlign) - byteIndex;
 				byteIndex += padding;
+				currentModule.structPaddingRef.set(structObj.fields[i].name, {
+					byteIndex: byteIndex,
+					padding: padding
+				});
+			} else {
+				currentModule.structPaddingRef.set(structObj.fields[i].name, {
+					byteIndex: byteIndex,
+					padding: padding
+				});
 			}
+			
 			byteIndex += fieldType.memSize;
 			// Padding.
 			if(padding != 0) {
@@ -300,7 +317,6 @@ class Converter {
 			));
 
 		}
-
 		// Check if final buffer is divisible by minimum alignment (1, 2. 4 or 8), if not round up to the nearest divisible number.
 		var finalSize:Int = Std.int(Math.ceil(byteIndex / minAlign) * minAlign);
 		var endPadding:Int = finalSize - byteIndex;
