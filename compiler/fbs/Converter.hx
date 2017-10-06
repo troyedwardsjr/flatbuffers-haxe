@@ -403,36 +403,48 @@ class Converter {
 				case TComposite(t): 
 					fieldType = {type: makeType(t), alias: t, memSize: 0, defaultVal: '0'};
 					var retCall:Expr = makeIdent('(obj != null ? obj : new ${t}()).__init(this.bb_pos + offset, this.bb)');
-					// Figure out type of composite by searching the current modules decleration type reference map for the type.
-					switch currentModule.declTypeRef[t] {
-						case DEnum(p):
-							retCall = makeIdent('(this.bb.read${convertType(p.type.getParameters()[0]).alias}(this.bb_pos + offset))');
-							// Maybe use unsafe cast instead of .getIndex() since it's an abstract.
-							defaultRet = makeIdent('${t}.${p.ctors[0].name.getParameters()[0]}.getIndex()');
-						case DUnion(p):
-						case DStruct(p):
-							args = [makeFuncArg("obj", makeType('Null<${t}>'))];
-							elem_size = currentModule.structSizeRef[p.name].finalSize;
-						case DTable(p):
-							args = [makeFuncArg("obj", makeType('Null<${t}>'))];
-							retCall = makeIdent('(obj != null ? obj : new ${t}()).__init(this.bb.__indirect(this.bb_pos + offset), this.bb)');
-						default:
-					}
+
 					if(field.isVector) {
-						retCall = makeIdent('(obj != null ? obj : new ${t}()).__init(this.bb.__vector(this.bb_pos + offset) + index * ${elem_size}, this.bb)');
-						args.unshift(makeFuncArg("index", makeType('Int')));
-						retExpr = makeExpr(EReturn(
-							makeExpr(ETernary(
-								makeIdent('offset != 0'), retCall, defaultRet
-							))
-						));
+						// Figure out type of composite by searching the current modules decleration type reference map for the type.
+						switch currentModule.declTypeRef[t] {
+							case DEnum(p):
+								retCall = makeIdent('(this.bb.read${convertType(p.type.getParameters()[0]).alias}(this.bb_pos + offset))');
+								// Maybe use unsafe cast instead of .getIndex() since it's an abstract.
+								defaultRet = makeIdent('${t}.${p.ctors[0].name.getParameters()[0]}.getIndex()');
+							case DUnion(p):
+							case DStruct(p):
+								args = [makeFuncArg("obj", makeType('Null<${t}>'), true)];
+								elem_size = currentModule.structSizeRef[p.name].finalSize;
+								retCall = makeIdent('(obj != null ? obj : new ${t}()).__init(this.bb.__vector(this.bb_pos + offset) + index * ${elem_size}, this.bb)');
+								args.unshift(makeFuncArg("index", makeType('Int')));
+							case DTable(p):
+								args = [makeFuncArg("obj", makeType('Null<${t}>'), true)];
+								
+								retCall = makeIdent('(obj != null ? obj : new ${t}()).__init(this.bb.__indirect(this.bb.__vector(this.bb_pos + offset) + index * 4), this.bb), this.bb)');
+							default:
+						}
 					} else {
-						retExpr = makeExpr(EReturn(
+						// Figure out type of composite by searching the current modules decleration type reference map for the type.
+						switch currentModule.declTypeRef[t] {
+							case DEnum(p):
+								retCall = makeIdent('(this.bb.read${convertType(p.type.getParameters()[0]).alias}(this.bb_pos + offset))');
+								// Maybe use unsafe cast instead of .getIndex() since it's an abstract.
+								defaultRet = makeIdent('${t}.${p.ctors[0].name.getParameters()[0]}.getIndex()');
+							case DUnion(p):
+							case DStruct(p):
+								args = [makeFuncArg("obj", makeType('Null<${t}>'), true)];
+								elem_size = currentModule.structSizeRef[p.name].finalSize;
+							case DTable(p):
+								args = [makeFuncArg("obj", makeType('Null<${t}>'), true)];
+								retCall = makeIdent('(obj != null ? obj : new ${t}()).__init(this.bb.__indirect(this.bb_pos + offset), this.bb)');
+							default:
+						}
+					}
+					retExpr = makeExpr(EReturn(
 							makeExpr(ETernary(
 								makeIdent('offset != 0'), retCall, defaultRet
 							))
-						));
-					}
+					));
 			}
 			
 			vtable_offset += 2;
