@@ -420,7 +420,7 @@ class Converter {
 							case DTable(p):
 								args = [makeFuncArg("obj", makeType('Null<${t}>'), true)];
 								
-								retCall = makeIdent('(obj != null ? obj : new ${t}()).__init(this.bb.__indirect(this.bb.__vector(this.bb_pos + offset) + index * 4), this.bb), this.bb)');
+								retCall = makeIdent('(obj != null ? obj : new ${t}()).__init(this.bb.__indirect(this.bb.__vector(this.bb_pos + offset) + index * 4), this.bb)');
 							default:
 						}
 					} else {
@@ -673,6 +673,7 @@ class Converter {
 			}
 
 			var addFieldArray:Array<Field>;
+			// Create add fields be default.
 			addFieldArray = [{
 				name: 'add${field.name.charAt(0).toUpperCase() + field.name.substr(1)}',
 				kind: FFun({
@@ -686,6 +687,7 @@ class Converter {
 				access: [APublic, AStatic],
 				pos: nullPos
 			}];
+			// Only create these fields if vector.
 			if(field.isVector) {
 				// elem_size: The size of each element in the array.
 				var elem_size:String = "";
@@ -710,6 +712,9 @@ class Converter {
 								num_elems = Std.string(currentModule.structSizeRef[p.name].minAlign);
 								skipCreate = true;
 							case DTable(p):
+								elem_size = Std.string(4);
+								num_elems = Std.string(4);
+								skipCreate = false;
 							default: 
 						}
 					case TPrimitive(t):
@@ -726,12 +731,12 @@ class Converter {
 					addFieldArray.push({
 							name: 'create${field.name.charAt(0).toUpperCase() + field.name.substr(1)}Vector',
 							kind: FFun({
-								args: [makeFuncArg("builder", makeType("Builder")), makeFuncArg(fieldName, fieldType.type)],
+								args: [makeFuncArg("builder", makeType("Builder")), makeFuncArg("data", makeType('Array<Offset>'))],
 								ret: makeType('Void'),
 								expr: makeExpr(EBlock([
 									makeExpr(ECall(
 										makeIdent('builder.startVector'), 
-										[makeIdent(Std.string(fieldType.memSize)), makeIdent(fieldName), makeIdent(Std.string(fieldType.memSize))]
+										[makeIdent(Std.string(4)), makeIdent(fieldName), makeIdent(Std.string(4))]
 									)),
 									makeIdent('var i:Int = data.length - 1'),
 									makeIdent('while (i >= 0) { builder.add${fieldType.alias}(data[i]); i--; }'),
