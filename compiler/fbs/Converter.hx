@@ -740,7 +740,7 @@ class Converter {
 						ret: makeType('Void'),
 						expr: makeExpr(EBlock([
 							makeExpr(ECall(
-								makeIdent('builder.addField${fieldType.alias}'), 
+								makeIdent('builder.startVector'), 
 								[makeIdent(elem_size), makeIdent("numElems"), makeIdent(num_elems)]
 							))
 						])),
