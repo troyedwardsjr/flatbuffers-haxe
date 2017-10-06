@@ -419,7 +419,7 @@ class Converter {
 								args.unshift(makeFuncArg("index", makeType('Int')));
 							case DTable(p):
 								args = [makeFuncArg("obj", makeType('Null<${t}>'), true)];
-								
+								args.unshift(makeFuncArg("index", makeType('Int')));
 								retCall = makeIdent('(obj != null ? obj : new ${t}()).__init(this.bb.__indirect(this.bb.__vector(this.bb_pos + offset) + index * 4), this.bb)');
 							default:
 						}
