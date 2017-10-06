@@ -408,9 +408,9 @@ class Converter {
 						// Figure out type of composite by searching the current modules decleration type reference map for the type.
 						switch currentModule.declTypeRef[t] {
 							case DEnum(p):
-								retCall = makeIdent('(this.bb.read${convertType(p.type.getParameters()[0]).alias}(this.bb_pos + offset))');
+								retCall = makeIdent('cast (this.bb.read${convertType(p.type.getParameters()[0]).alias}(this.bb_pos + offset))');
 								// Maybe use unsafe cast instead of .getIndex() since it's an abstract.
-								defaultRet = makeIdent('${t}.${p.ctors[0].name.getParameters()[0]}.getIndex()');
+								defaultRet = makeIdent('cast ${t}.${p.ctors[0].name.getParameters()[0]}');
 							case DUnion(p):
 							case DStruct(p):
 								args = [makeFuncArg("obj", makeType('Null<${t}>'), true)];
@@ -427,9 +427,9 @@ class Converter {
 						// Figure out type of composite by searching the current modules decleration type reference map for the type.
 						switch currentModule.declTypeRef[t] {
 							case DEnum(p):
-								retCall = makeIdent('(this.bb.read${convertType(p.type.getParameters()[0]).alias}(this.bb_pos + offset))');
+								retCall = makeIdent('cast (this.bb.read${convertType(p.type.getParameters()[0]).alias}(this.bb_pos + offset))');
 								// Maybe use unsafe cast instead of .getIndex() since it's an abstract.
-								defaultRet = makeIdent('${t}.${p.ctors[0].name.getParameters()[0]}.getIndex()');
+								defaultRet = makeIdent('cast ${t}.${p.ctors[0].name.getParameters()[0]}');
 							case DUnion(p):
 							case DStruct(p):
 								args = [makeFuncArg("obj", makeType('Null<${t}>'), true)];
@@ -604,7 +604,8 @@ class Converter {
 			var fieldType:FieldType;
 			var expr:Expr;
 			var fieldName:String = field.name; // Field name to have "Offset" added if needed.
-			
+			var enumCast:String = "";
+
 			switch (field.type) {
 				case TPrimitive(t): 
 					fieldType = convertType(field.type.getParameters()[0]);
@@ -646,7 +647,8 @@ class Converter {
 							case DEnum(p):
 								fieldType.alias = convertType(p.type.getParameters()[0]).alias;
 								// Maybe use unsafe cast instead of .getIndex() since it's an abstract.
-								fieldType.defaultVal = '${t}.${p.ctors[0].name.getParameters()[0]}.getIndex()';
+								fieldType.defaultVal = 'cast ${t}.${p.ctors[0].name.getParameters()[0]}';
+								enumCast = "cast ";
 							case DUnion(p):
 							case DStruct(p):
 								fieldType.type = makeType("Offset");
@@ -667,7 +669,7 @@ class Converter {
 					expr = makeExpr(EBlock([
 						makeExpr(ECall(
 							makeIdent('builder.addField${fieldType.alias}'), 
-							[makeIdent(Std.string(i)), makeIdent(fieldName), makeIdent(fieldType.defaultVal)]
+							[makeIdent(Std.string(i)), makeIdent('${enumCast}${fieldName}'), makeIdent(fieldType.defaultVal)]
 						))
 					]));
 			}
@@ -732,11 +734,11 @@ class Converter {
 							name: 'create${field.name.charAt(0).toUpperCase() + field.name.substr(1)}Vector',
 							kind: FFun({
 								args: [makeFuncArg("builder", makeType("Builder")), makeFuncArg("data", makeType('Array<Offset>'))],
-								ret: makeType('Void'),
+								ret: makeType('Offset'),
 								expr: makeExpr(EBlock([
 									makeExpr(ECall(
 										makeIdent('builder.startVector'), 
-										[makeIdent(Std.string(4)), makeIdent(fieldName), makeIdent(Std.string(4))]
+										[makeIdent(Std.string(4)), makeIdent('data.length'), makeIdent(Std.string(4))]
 									)),
 									makeIdent('var i:Int = data.length - 1'),
 									makeIdent('while (i >= 0) { builder.add${fieldType.alias}(data[i]); i--; }'),
