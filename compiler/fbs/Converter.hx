@@ -382,7 +382,7 @@ class Converter {
 						case "String":
 							fieldType.alias = "__string";
 						case "Int64":
-							fieldType.defaultVal = "Long.create(0, 0)";
+							fieldType.defaultVal = "Int64.make(0, 0)";
 						default:
 							fieldType.alias = 'read' + fieldType.alias;
 					}
