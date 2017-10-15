@@ -746,17 +746,16 @@ class ByteBuffer
 
 }
 
-class Long 
+abstract Long(Int64) 
 {
 	private inline static var MAX_32_PRECISION = 4294967296;
 	public static var ZERO:Long = new Long(0, 0);
-	public var low:Int;
-	public var high:Int;
-	
-	public function new(low:Int, high:Int)
+	public var low(get, never) : Int32;
+	public var high(get, never) : Int32;
+
+	inline public function new(low:Int, high:Int)
 	{
-		this.low = low;
-		this.high = high;
+		this = Int64.make(low, high);
 	}
 
 	public function getInstance():Long
@@ -771,12 +770,22 @@ class Long
 
 	public function toFloat64():Float
 	{
-		return (Int64.getHigh(this.high) * MAX_32_PRECISION + Int64.getLow(this.low));
+		return this.high * MAX_32_PRECISION + this.low;
 	}
 
 	public function equals(other:Long):Bool
 	{
 		return this.low == other.low && this.high == other.high;
+	}
+
+	public inline function get_low() : Int32 
+	{
+		return this.low;
+	}
+
+	public inline function get_high() : Int32 
+	{
+		return this.high;
 	}
 
 }
