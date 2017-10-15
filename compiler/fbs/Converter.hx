@@ -382,6 +382,7 @@ class Converter {
 						case "String":
 							fieldType.alias = "__string";
 						case "Int64":
+							fieldType.alias = 'read' + fieldType.alias;
 							fieldType.defaultVal = "Int64.make(0, 0)";
 						default:
 							fieldType.alias = 'read' + fieldType.alias;
@@ -507,11 +508,11 @@ class Converter {
 								ret: makeType('Null', null, [TPType(fieldType.type)]),
 								expr: makeExpr(EBlock([
 									makeExpr(makeVar(
-										'offset', makeType('Null<Int>'), makeIdent('this.bb.__offset(this.bb_pos, ${vtable_offset})')
+										'offset', makeType('Null<${typeAlias}Array>'), makeIdent('this.bb.__offset(this.bb_pos, ${vtable_offset})')
 									)),
 									makeExpr(EReturn(
 										makeExpr(ETernary(
-											makeIdent('offset != 0'), makeIdent('${typeAlias}Array.fromBytes(this.bb.bytes().view.buffer, this.bb.bytes().view.byteOffset + this.bb.__vector(this.bb_pos + offset), this.bb.__vector_len(this.bb_pos + offset))'), makeIdent(fieldType.defaultVal)
+											makeIdent('offset != 0'), makeIdent('${typeAlias}Array.fromBytes(this.bb.bytes().view.buffer, this.bb.bytes().view.byteOffset + this.bb.__vector(this.bb_pos + offset), this.bb.__vector_len(this.bb_pos + offset))'), makeIdent('null')
 										))
 									))
 								])),
@@ -858,8 +859,8 @@ class Converter {
 			case TInt: {type: makeType("Int"), alias: "Int32", memSize: 4, defaultVal: "0"}; // Int32
 			case TUInt: {type: makeType("Int"), alias: "Int32", memSize: 4, defaultVal: "0"}; // Int32
 			case TFloat: {type: makeType("Float"), alias: "Float32", memSize: 4, defaultVal: "0.0"}; // Float32
-			case TLong: {type: makeType("Long"), alias: "Int64", memSize: 8, defaultVal: "0"}; // Int64
-			case TULong: {type: makeType("Long"), alias: "Int64", memSize: 8, defaultVal: "0"}; // Int64
+			case TLong: {type: makeType("Int64"), alias: "Int64", memSize: 8, defaultVal: "0"}; // Int64
+			case TULong: {type: makeType("Int64"), alias: "Int64", memSize: 8, defaultVal: "0"}; // Int64
 			case TDouble: {type: makeType("Float"), alias: "Float64", memSize: 8, defaultVal: "0.0"}; // Float64
 			case TString: {type: makeType("String"), alias: "String", memSize: 4, defaultVal: "null"}; // String
 		}
