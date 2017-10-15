@@ -409,7 +409,7 @@ class Converter {
 						// Figure out type of composite by searching the current modules decleration type reference map for the type.
 						switch currentModule.declTypeRef[t] {
 							case DEnum(p):
-								retCall = makeIdent('cast (this.bb.read${convertType(p.type.getParameters()[0]).alias}(this.bb_pos + offset))');
+								retCall = makeIdent('cast (this.bb.read${convertType(p.type.getParameters()[0]).alias}(this.bb.__vector(this.bb_pos + offset) + index))');
 								// Maybe use unsafe cast instead of .getIndex() since it's an abstract.
 								defaultRet = makeIdent('cast ${t}.${p.ctors[0].name.getParameters()[0]}');
 							case DUnion(p):
