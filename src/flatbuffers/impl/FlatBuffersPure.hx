@@ -129,7 +129,7 @@ class Builder
 		this.bb.writeInt32(this.space -= 4, value);
 	}
 
-	public function writeInt64(value:Long):Void
+	public function writeInt64(value:Int64):Void
 	{
 		this.bb.writeInt64(this.space -= 8, value);
 	}
@@ -162,7 +162,7 @@ class Builder
 		this.writeInt32(value);
 	}
 
-	public function addInt64(value:Long):Void
+	public function addInt64(value:Int64):Void
 	{
 		this.prep(8, 0);
 		this.writeInt64(value);
@@ -204,7 +204,7 @@ class Builder
 		}
 	}
 
-	public function addFieldInt64(voffset:Int, value:Long, defaultValue:Long):Void
+	public function addFieldInt64(voffset:Int, value:Int64, defaultValue:Int64):Void
 	{
 		if (this.force_defaults || value != defaultValue) {
 			this.addInt64(value);
@@ -487,9 +487,9 @@ class Builder
 		return this.endVector();
 	}
 
-	public function createLong(low:Int, high:Int):Long
+	public function createLong(low:Int, high:Int):Int64
 	{
-		return Long.create(low, high);
+		return Int64.make(low, high);
 	}
 
 }
@@ -559,14 +559,14 @@ class ByteBuffer
 		return this.readInt32(offset) >>> 0;
 	}
 	
-	public function readInt64(offset:Int):Long
+	public function readInt64(offset:Int):Int64
 	{
-		return new Long(this.readInt32(offset), this.readInt32(offset + 4));
+		return Int64.make(this.readInt32(offset), this.readInt32(offset + 4));
 	}
 
-	public function readUint64(offset:Int):Long
+	public function readUint64(offset:Int):Int64
 	{
-		return new Long(this.readUint32(offset), this.readUint32(offset + 4));
+		return Int64.make(this.readUint32(offset), this.readUint32(offset + 4));
 	}
 
 	public function readFloat32(offset:Int):Float
@@ -614,13 +614,13 @@ class ByteBuffer
     this.bytes_[offset + 3] = value >> 24;
 	}
 
-	public function writeInt64(offset:Int, value:Long):Void
+	public function writeInt64(offset:Int, value:Int64):Void
 	{
 		this.writeInt32(offset, value.low);
 		this.writeInt32(offset + 4, value.high);
 	}
 
-	public function writeUint64(offset:Int, value:Long):Void
+	public function writeUint64(offset:Int, value:Int64):Void
 	{
 		this.writeUint32(offset, value.low);
 		this.writeUint32(offset + 4, value.high);
@@ -739,9 +739,9 @@ class ByteBuffer
 		return true;
 	}
 
-	public function createLong(low:Int, high:Int):Long
+	public function createLong(low:Int, high:Int):Int64
 	{
-		return Long.create(low, high);
+		return Int64.make(low, high);
 	}
 
 }
