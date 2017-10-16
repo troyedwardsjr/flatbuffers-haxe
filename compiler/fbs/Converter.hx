@@ -504,11 +504,11 @@ class Converter {
 						vecFieldArray.push({
 							name: '${field.name}Array',
 							kind: FFun({
-								args: [],
-								ret: makeType('Null', null, [TPType(fieldType.type)]),
+								args: [makeFuncArg("index", makeType('Int'))],
+								ret: makeType('Null', null, [TPType(makeType('${typeAlias}Array'))]),
 								expr: makeExpr(EBlock([
 									makeExpr(makeVar(
-										'offset', makeType('Null<${typeAlias}Array>'), makeIdent('this.bb.__offset(this.bb_pos, ${vtable_offset})')
+										'offset', makeType('Null<Int>'), makeIdent('this.bb.__offset(this.bb_pos, ${vtable_offset})')
 									)),
 									makeExpr(EReturn(
 										makeExpr(ETernary(
@@ -537,15 +537,15 @@ class Converter {
 								vecFieldArray.push({
 								name: '${field.name}Array',
 								kind: FFun({
-									args: [],
-									ret: makeType('Null', null, [TPType(fieldType.type)]),
+									args: [makeFuncArg("index", makeType('Int'))],
+									ret: makeType('Null', null, [TPType(makeType('${typeAlias}Array'))]),
 									expr: makeExpr(EBlock([
 										makeExpr(makeVar(
 											'offset', makeType('Null<Int>'), makeIdent('this.bb.__offset(this.bb_pos, ${vtable_offset})')
 										)),
 										makeExpr(EReturn(
 											makeExpr(ETernary(
-												makeIdent('offset != 0'), makeIdent('${typeAlias}Array.fromBytes(this.bb.bytes().view.buffer, this.bb.bytes().view.byteOffset + this.bb.__vector(this.bb_pos + offset), this.bb.__vector_len(this.bb_pos + offset))'), makeIdent(fieldType.defaultVal)
+												makeIdent('offset != 0'), makeIdent('${typeAlias}Array.fromBytes(this.bb.bytes().view.buffer, this.bb.bytes().view.byteOffset + this.bb.__vector(this.bb_pos + offset), this.bb.__vector_len(this.bb_pos + offset))'), makeIdent('null')
 											))
 										))
 									])),
