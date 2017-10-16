@@ -409,6 +409,7 @@ class Converter {
 						// Figure out type of composite by searching the current modules decleration type reference map for the type.
 						switch currentModule.declTypeRef[t] {
 							case DEnum(p):
+								args = [makeFuncArg("index", makeType('Int'))];
 								retCall = makeIdent('cast (this.bb.read${convertType(p.type.getParameters()[0]).alias}(this.bb.__vector(this.bb_pos + offset) + index))');
 								// Maybe use unsafe cast instead of .getIndex() since it's an abstract.
 								defaultRet = makeIdent('cast ${t}.${p.ctors[0].name.getParameters()[0]}');
@@ -504,7 +505,7 @@ class Converter {
 						vecFieldArray.push({
 							name: '${field.name}Array',
 							kind: FFun({
-								args: [makeFuncArg("index", makeType('Int'))],
+								args: [],
 								ret: makeType('Null', null, [TPType(makeType('${typeAlias}Array'))]),
 								expr: makeExpr(EBlock([
 									makeExpr(makeVar(
