@@ -538,7 +538,7 @@ class Converter {
 								vecFieldArray.push({
 								name: '${field.name}Array',
 								kind: FFun({
-									args: [makeFuncArg("index", makeType('Int'))],
+									args: [],
 									ret: makeType('Null', null, [TPType(makeType('${typeAlias}Array'))]),
 									expr: makeExpr(EBlock([
 										makeExpr(makeVar(
