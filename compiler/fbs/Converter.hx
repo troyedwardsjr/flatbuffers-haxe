@@ -709,6 +709,7 @@ class Converter {
 								num_elems = "0";
 								fieldType.memSize = convertType(p.type.getParameters()[0]).memSize;
 								fieldType.alias = convertType(p.type.getParameters()[0]).alias;
+								fieldType.type = makeType('Array<${p.name}>');
 							case DUnion(p):
 							case DStruct(p):
 								// Combined size of all fields in struct.
@@ -726,7 +727,7 @@ class Converter {
 							case TString:
 								fieldType.alias = "Offset";
 							default:
-								fieldType.alias = convertType(t).alias;
+								fieldType.type = makeType('Array<${convertType(t).type.getParameters()[0].name}>');
 						}
 						elem_size = Std.string(fieldType.memSize);
 						num_elems = Std.string(fieldType.memSize);
@@ -735,7 +736,7 @@ class Converter {
 					addFieldArray.push({
 							name: 'create${field.name.charAt(0).toUpperCase() + field.name.substr(1)}Vector',
 							kind: FFun({
-								args: [makeFuncArg("builder", makeType("Builder")), makeFuncArg("data", makeType('Array<Offset>'))],
+								args: [makeFuncArg("builder", makeType("Builder")), makeFuncArg("data", fieldType.type)],
 								ret: makeType('Offset'),
 								expr: makeExpr(EBlock([
 									makeExpr(ECall(
