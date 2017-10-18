@@ -711,14 +711,17 @@ class Converter {
 								fieldType.alias = convertType(p.type.getParameters()[0]).alias;
 								fieldType.type = makeType('Array<${p.name}>');
 							case DUnion(p):
+								fieldType.type = makeType('Array<${p.name}>');
 							case DStruct(p):
 								// Combined size of all fields in struct.
 								elem_size = Std.string(currentModule.structSizeRef[p.name].finalSize);
 								num_elems = Std.string(currentModule.structSizeRef[p.name].minAlign);
+								fieldType.type = makeType('Array<${p.name}>');
 								skipCreate = true;
 							case DTable(p):
 								elem_size = Std.string(4);
 								num_elems = Std.string(4);
+								fieldType.type = makeType('Array<${p.name}>');
 								skipCreate = false;
 							default: 
 						}
@@ -726,6 +729,7 @@ class Converter {
 						switch t {
 							case TString:
 								fieldType.alias = "Offset";
+								fieldType.type = makeType('Array<${convertType(t).type.getParameters()[0].name}>');
 							default:
 								fieldType.type = makeType('Array<${convertType(t).type.getParameters()[0].name}>');
 						}
@@ -744,7 +748,7 @@ class Converter {
 										[makeIdent(Std.string(4)), makeIdent('data.length'), makeIdent(Std.string(4))]
 									)),
 									makeIdent('var i:Int = data.length - 1'),
-									makeIdent('while (i >= 0) { builder.add${fieldType.alias}(data[i]); i--; }'),
+									makeIdent('while (i >= 0) { builder.add${fieldType.alias}(cast data[i]); i--; }'),
 									makeIdent('return builder.endVector()')
 								])),
 								params: null
