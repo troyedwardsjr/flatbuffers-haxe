@@ -747,7 +747,7 @@ class Converter {
 								expr: makeExpr(EBlock([
 									makeExpr(ECall(
 										makeIdent('builder.startVector'), 
-										[makeIdent(elem_size), makeIdent('data.length'), makeIdent(elem_size)]
+										[makeIdent(elem_size), makeIdent('data.length'), makeIdent(num_elems)]
 									)),
 									makeIdent('var i:Int = data.length - 1'),
 									makeIdent('while (i >= 0) { builder.add${fieldType.alias}(cast data[i]); i--; }'),
