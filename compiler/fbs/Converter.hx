@@ -710,6 +710,8 @@ class Converter {
 								fieldType.memSize = convertType(p.type.getParameters()[0]).memSize;
 								fieldType.alias = convertType(p.type.getParameters()[0]).alias;
 								fieldType.type = makeType('Array<${p.name}>');
+								elem_size = Std.string(convertType(p.type.getParameters()[0]).memSize);
+								num_elems = Std.string(convertType(p.type.getParameters()[0]).memSize);
 							case DUnion(p):
 								fieldType.type = makeType('Array<${p.name}>');
 							case DStruct(p):
