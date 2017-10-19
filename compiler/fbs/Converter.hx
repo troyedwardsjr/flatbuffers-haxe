@@ -733,6 +733,7 @@ class Converter {
 								fieldType.alias = "Offset";
 								fieldType.type = makeType('Array<${convertType(t).type.getParameters()[0].name}>');
 							default:
+								fieldType.alias = convertType(t).alias;
 								fieldType.type = makeType('Array<${convertType(t).type.getParameters()[0].name}>');
 						}
 						elem_size = Std.string(fieldType.memSize);
