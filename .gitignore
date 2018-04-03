@@ -1,3 +1,6 @@
 node_modules/
 .vscode/
 build.hxml
+tests/build/js/test.js
+tests/build/js/test.js.map
+tests/build/cpp/
