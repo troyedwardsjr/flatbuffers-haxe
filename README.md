@@ -13,3 +13,5 @@ C++/Neko,
 Android(Java) (Untested, but should work), 
 AS3 (Untested, but should work),
 ect.
+
+[MIT LICENSE](https://opensource.org/licenses/MIT "MIT LICENSE")
