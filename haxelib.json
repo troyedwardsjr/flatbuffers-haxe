@@ -6,7 +6,7 @@
   "classPath": "src",
   "tags": ["js","extern", "flatbuffers"],
   "description": "Implementation of Google's FlatBuffers for Haxe.",
-  "version": "0.0.8",
+  "version": "1.0.0",
   "releasenote": "FlatBuffers",
   "dependencies": {
     "hxparse": "4.0.0",
