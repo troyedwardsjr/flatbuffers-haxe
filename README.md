@@ -19,11 +19,11 @@ or
 ```
 
 Current targets: 
--JS
--C++/Neko
--Android(Java) (Untested, but should work)
--AS3 (Untested, but should work)
-ect.
+- JS
+- C++/Neko
+- Android(Java) (Untested, but should work)
+- AS3 (Untested, but should work)
+- ect.
 
 Currently working:
 - Structs
