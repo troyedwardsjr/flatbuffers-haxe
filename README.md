@@ -6,11 +6,9 @@ A pure haxe implementation and compiler of Google's FlatBuffers in Haxe.
 ```bash
   haxelib git flatbuffers https://github.com/troyedwardsjr/flatbuffers-haxe.git
 ```
-
 or
-
 ```bash
-  haxelib git flatbuffers https://github.com/troyedwardsjr/flatbuffers-haxe.git
+  haxelib install flatbuffers
 ```
 ## How to compile schema to Haxe
 
