@@ -4,10 +4,7 @@ import fbs.Ast;
 import fbs.Parser;
 
 import haxe.macro.Expr;
-import haxe.macro.Type;
-import haxe.macro.TypeTools;
 
-using StringTools;
 using Lambda;
 
 typedef HaxeModule = {
@@ -30,7 +27,7 @@ typedef StructPadding = {
 }
 
 typedef FieldType = {
-	type:ComplexType, 
+	type:ComplexType,
 	alias:String,
 	memSize:Int,
 	defaultVal:String
@@ -42,10 +39,10 @@ class Converter {
 
 	public function new() {
 		currentModule = {
-			className: "", 
-			types: [], 
-			toplevel: [], 
-			declTypeRef: new Map<String, FbsDeclaration>(), 
+			className: "",
+			types: [],
+			toplevel: [],
+			declTypeRef: new Map<String, FbsDeclaration>(),
 			structSizeRef: new Map<String, StructSize>(),
 			structPaddingRef: new Map<String, StructPadding>()
 		};
@@ -71,18 +68,17 @@ class Converter {
 		});
 
 		var printer:haxe.macro.Printer = new haxe.macro.Printer();
-		currentModule.types.map(function(t) {
+        for (t in currentModule.types){
 			trace(printer.printTypeDefinition(t));
-		});
+		};
 
 		return currentModule;
 	}
 
 	function storeDeclTypes(parsedObj:ParsedObject):Void {
 		for(field in Reflect.fields(parsedObj)) {
-			Reflect.field(parsedObj, field);
-			(cast Reflect.field(parsedObj, field):Array<Dynamic>).map(function(decl:FbsDeclaration) {
-				switch decl {
+            for (decl in cast ( Reflect.field(parsedObj, field), Array<Dynamic>)) {
+				switch cast(decl, FbsDeclaration) {
 					case DNamespace(p):
 						currentModule.declTypeRef.set(p[p.length - 1], decl);
 					case DEnum(p):
@@ -95,8 +91,9 @@ class Converter {
 						currentModule.declTypeRef.set(p.name, decl);
 					case DRootType(p):
 						currentModule.declTypeRef.set(p[p.length - 1], decl);
-				}	
-			});
+				}
+            }
+
 		}
 	}
 
@@ -117,7 +114,7 @@ class Converter {
 
 	function convertEnum(decl:FbsDeclaration):TypeDefinition {
 		var enumObj:FbsEnum = decl.getParameters()[0];
-		var fields:List<Field> = enumObj.ctors.mapi(function(i:Int, ctor:FbsEnumCtor):Field {
+		var fields:Array<Field> = enumObj.ctors.mapi(function(i:Int, ctor:FbsEnumCtor):Field {
 			var fieldVal = 0;
 			if (ctor.value != null) {
 				fieldVal = Std.parseInt(ctor.value);
@@ -141,7 +138,7 @@ class Converter {
 			params: [],
 			isExtern: false,
 			kind: TDAbstract(makeType("Int")),
-			fields: Lambda.array(fields) 
+			fields: Lambda.array(fields)
 		}
 	}
 
@@ -154,7 +151,7 @@ class Converter {
 			return structObj.fields.map(function(field:FbsStructField) {
 				var fieldType:FieldType;
 				switch field.type {
-					case TPrimitive(t): 
+					case TPrimitive(_):
 						fieldType = convertType(field.type.getParameters()[0]);
 						enumCast = "";
 					case TComposite(t):
@@ -164,7 +161,7 @@ class Converter {
 								fieldType.alias = convertType(p.type.getParameters()[0]).alias;
 								fieldType.memSize = convertType(p.type.getParameters()[0]).memSize;
 								enumCast = "cast ";
-							case DStruct(p):
+							case DStruct(_):
 							default:
 								enumCast = "";
 						}
@@ -185,8 +182,8 @@ class Converter {
 			});
 		}
 		var allFields:Array<Field> = Lambda.array(Lambda.flatten([
-			makeBbVars(), 
-			[makeCon()], 
+			makeBbVars(),
+			[makeCon()],
 			[makeInitFunc(structObj.name)],
 			[convertStructCreate(structObj)],
 			funcFields()
@@ -202,34 +199,34 @@ class Converter {
 			fields: allFields
 		};
 	}
-	
+
 	function convertStructRet(field:FbsStructField, fieldType:FieldType, enumCast:String):Expr {
 		var args:Array<Expr>;
 		var ident:String = "this.bb_pos";
 		args = [
 			makeExpr(
 				EBinop(
-					OpAdd, 
-					makeIdent(ident), 
+					OpAdd,
+					makeIdent(ident),
 					makeInt(Std.string(currentModule.structPaddingRef.get(field.name).byteIndex))
-				) 
+				)
 			)
 		];
 		return makeExpr(EBlock([
 			makeExpr(EReturn(
 				makeExpr(ECall(
-						makeIdent('${enumCast}this.bb.read${fieldType.alias}'), 
+						makeIdent('${enumCast}this.bb.read${fieldType.alias}'),
 						args
 				))
 			))
-		]));	
+		]));
 	}
 
 	function convertStructCreate(structObj:FbsStruct):Field {
 		var fieldType:FieldType;
 		var args:Array<FunctionArg> = structObj.fields.map(function(field:FbsStructField) {
 			switch field.type {
-				case TPrimitive(t): 
+				case TPrimitive(_):
 					fieldType = convertType(field.type.getParameters()[0]);
 				case TComposite(t):
 					fieldType = {type: makeType(t), alias: t, memSize: 0, defaultVal: '0'};
@@ -237,7 +234,7 @@ class Converter {
 						case DEnum(p):
 							fieldType.alias = convertType(p.type.getParameters()[0]).alias;
 							fieldType.memSize = convertType(p.type.getParameters()[0]).memSize;
-						case DStruct(p):
+						case DStruct(_):
 						default:
 					}
 			}
@@ -247,7 +244,7 @@ class Converter {
 
 		var memSizeList:Array<Int> = structObj.fields.map(function(field:FbsStructField) {
 			switch field.type {
-				case TPrimitive(t): 
+				case TPrimitive(_):
 					return convertType(field.type.getParameters()[0]).memSize;
 				case TComposite(t):
 					switch currentModule.declTypeRef[t] {
@@ -261,9 +258,6 @@ class Converter {
 		var minAlign:Int = memSizeList.fold(function(a:Int, b:Int) {
 			return Std.int(Math.max(a, b));
 		}, 0);
-		var additional_bytes:Int = memSizeList.fold(function(a:Int, b:Int) {
-			return a + b;
-		}, 0);
 
 		var expr:Array<Expr> = [];
 		var byteIndex:Int = 0;
@@ -271,7 +265,7 @@ class Converter {
 		for (i in 0...structObj.fields.length) {
 			var fieldType:FieldType;
 			switch (cast structObj.fields[i].type:FbsType) {
-				case TPrimitive(t): 
+				case TPrimitive(_):
 					fieldType = convertType(structObj.fields[i].type.getParameters()[0]);
 					enumCast = "";
 				case TComposite(t):
@@ -281,15 +275,15 @@ class Converter {
 							fieldType.alias = convertType(p.type.getParameters()[0]).alias;
 							fieldType.memSize = convertType(p.type.getParameters()[0]).memSize;
 							enumCast = "cast ";
-						case DUnion(p):
-						case DStruct(p):
-						case DTable(p):
+						case DUnion(_):
+						case DStruct(_):
+						case DTable(_):
 						default:
 						enumCast = "";
 					}
 			}
 			var padding:Int = 0;
-			
+
 			if(fieldType.memSize + (byteIndex % minAlign) > minAlign) {
 				padding = (Math.ceil(byteIndex / minAlign) * minAlign) - byteIndex;
 				byteIndex += padding;
@@ -303,7 +297,7 @@ class Converter {
 					padding: padding
 				});
 			}
-			
+
 			byteIndex += fieldType.memSize;
 			// Padding.
 			if(padding != 0) {
@@ -364,7 +358,7 @@ class Converter {
 	function convertTable(decl:FbsDeclaration):TypeDefinition {
 		var structObj:FbsTable = decl.getParameters()[0];
 		var fieldsLength:Int = structObj.fields.length;
-		
+
 		var args:Array<FunctionArg> = [];
 		var defaultRet:Expr = makeIdent('null');
 		var vtable_offset:Int = 2;
@@ -376,7 +370,7 @@ class Converter {
 			defaultRet = makeIdent('null');
 			args = [];
 			switch (field.type) {
-				case TPrimitive(t): 
+				case TPrimitive(_):
 					fieldType = convertType(field.type.getParameters()[0]);
 					switch(fieldType.alias) {
 						case "String":
@@ -401,7 +395,7 @@ class Converter {
 							))
 						));
 					}
-				case TComposite(t): 
+				case TComposite(t):
 					fieldType = {type: makeType(t), alias: t, memSize: 0, defaultVal: '0'};
 					var retCall:Expr = makeIdent('(obj != null ? obj : new ${t}()).__init(this.bb_pos + offset, this.bb)');
 
@@ -413,13 +407,13 @@ class Converter {
 								retCall = makeIdent('cast (this.bb.read${convertType(p.type.getParameters()[0]).alias}(this.bb.__vector(this.bb_pos + offset) + index))');
 								// Maybe use unsafe cast instead of .getIndex() since it's an abstract.
 								defaultRet = makeIdent('cast ${t}.${p.ctors[0].name.getParameters()[0]}');
-							case DUnion(p):
+							case DUnion(_):
 							case DStruct(p):
 								args = [makeFuncArg("obj", makeType('Null<${t}>'), true)];
 								elem_size = currentModule.structSizeRef[p.name].finalSize;
 								retCall = makeIdent('(obj != null ? obj : new ${t}()).__init(this.bb.__vector(this.bb_pos + offset) + index * ${elem_size}, this.bb)');
 								args.unshift(makeFuncArg("index", makeType('Int')));
-							case DTable(p):
+							case DTable(_):
 								args = [makeFuncArg("obj", makeType('Null<${t}>'), true)];
 								args.unshift(makeFuncArg("index", makeType('Int')));
 								retCall = makeIdent('(obj != null ? obj : new ${t}()).__init(this.bb.__indirect(this.bb.__vector(this.bb_pos + offset) + index * 4), this.bb)');
@@ -432,11 +426,11 @@ class Converter {
 								retCall = makeIdent('cast (this.bb.read${convertType(p.type.getParameters()[0]).alias}(this.bb_pos + offset))');
 								// Maybe use unsafe cast instead of .getIndex() since it's an abstract.
 								defaultRet = makeIdent('cast ${t}.${p.ctors[0].name.getParameters()[0]}');
-							case DUnion(p):
+							case DUnion(_):
 							case DStruct(p):
 								args = [makeFuncArg("obj", makeType('Null<${t}>'), true)];
 								elem_size = currentModule.structSizeRef[p.name].finalSize;
-							case DTable(p):
+							case DTable(_):
 								args = [makeFuncArg("obj", makeType('Null<${t}>'), true)];
 								retCall = makeIdent('(obj != null ? obj : new ${t}()).__init(this.bb.__indirect(this.bb_pos + offset), this.bb)');
 							default:
@@ -448,7 +442,7 @@ class Converter {
 							))
 					));
 			}
-			
+
 			vtable_offset += 2;
 			if(field.isVector) {
 				var vecFieldArray:Array<Field>;
@@ -601,27 +595,27 @@ class Converter {
 			access: [APublic, AStatic],
 			pos: nullPos
 		}
-		
-		var funcAddFields:List<Array<Field>> = structObj.fields.mapi(function(i:Int, field:FbsTableField) {
+
+		var funcAddFields:Array<Array<Field>> = structObj.fields.mapi(function(i:Int, field:FbsTableField) {
 			var fieldType:FieldType;
 			var expr:Expr;
 			var fieldName:String = field.name; // Field name to have "Offset" added if needed.
 			var enumCast:String = "";
 
 			switch (field.type) {
-				case TPrimitive(t): 
+				case TPrimitive(_):
 					fieldType = convertType(field.type.getParameters()[0]);
 					if(!field.isVector) {
 						switch((cast field.type.getParameters()[0]:FbsPrimitiveType)) {
-							case TByte: 
+							case TByte:
 								fieldName += " ? 1 : 0";
-							case TUByte: 
+							case TUByte:
 								fieldName += " ? 1 : 0";
-							case TLong: 
+							case TLong:
 								fieldType.defaultVal = "builder.createLong(0, 0)";
 							case TULong:
 								fieldType.defaultVal = "builder.createLong(0, 0)";
-							case TString: 
+							case TString:
 								fieldName += "Offset";
 								fieldType.alias = "Offset";
 								fieldType.type = makeType("Offset");
@@ -637,11 +631,11 @@ class Converter {
 					}
 					expr = makeExpr(EBlock([
 						makeExpr(ECall(
-							makeIdent('builder.addField${fieldType.alias}'), 
+							makeIdent('builder.addField${fieldType.alias}'),
 							[makeIdent(Std.string(i)), makeIdent(fieldName), makeIdent(fieldType.defaultVal)]
 						))
 					]));
-				case TComposite(t): 
+				case TComposite(t):
 					fieldType = {type: makeType(t), alias: "Offset", memSize: 0, defaultVal: "0"};
 					// Figure out type of composite by searching the current modules decleration type reference map for the type.
 					if(!field.isVector) {
@@ -651,12 +645,12 @@ class Converter {
 								// Maybe use unsafe cast instead of .getIndex() since it's an abstract.
 								fieldType.defaultVal = 'cast ${t}.${p.ctors[0].name.getParameters()[0]}';
 								enumCast = "cast ";
-							case DUnion(p):
-							case DStruct(p):
+							case DUnion(_):
+							case DStruct(_):
 								fieldType.type = makeType("Offset");
 								fieldType.alias = "Struct";
 								fieldName += "Offset";
-							case DTable(p):
+							case DTable(_):
 								fieldType.type = makeType("Offset");
 								fieldName += "Offset";
 							default:
@@ -670,7 +664,7 @@ class Converter {
 					}
 					expr = makeExpr(EBlock([
 						makeExpr(ECall(
-							makeIdent('builder.addField${fieldType.alias}'), 
+							makeIdent('builder.addField${fieldType.alias}'),
 							[makeIdent(Std.string(i)), makeIdent('${enumCast}${fieldName}'), makeIdent(fieldType.defaultVal)]
 						))
 					]));
@@ -725,7 +719,7 @@ class Converter {
 								num_elems = Std.string(4);
 								fieldType.type = makeType('Array<${p.name}>');
 								skipCreate = false;
-							default: 
+							default:
 						}
 					case TPrimitive(t):
 						switch t {
@@ -747,7 +741,7 @@ class Converter {
 								ret: makeType('Offset'),
 								expr: makeExpr(EBlock([
 									makeExpr(ECall(
-										makeIdent('builder.startVector'), 
+										makeIdent('builder.startVector'),
 										[makeIdent(elem_size), makeIdent('data.length'), makeIdent(num_elems)]
 									)),
 									makeIdent('var i:Int = data.length - 1'),
@@ -769,7 +763,7 @@ class Converter {
 						ret: makeType('Void'),
 						expr: makeExpr(EBlock([
 							makeExpr(ECall(
-								makeIdent('builder.startVector'), 
+								makeIdent('builder.startVector'),
 								[makeIdent(elem_size), makeIdent("numElems"), makeIdent(num_elems)]
 							))
 						])),
@@ -783,7 +777,7 @@ class Converter {
 			}
 			return addFieldArray;
 		});
-		
+
 		var funcEndFields:Field = {
 			name: 'end${structObj.name}',
 			kind: FFun({
@@ -807,7 +801,7 @@ class Converter {
 
 		var allFields:Array<Field> = Lambda.array(Lambda.flatten([
 			makeBbVars(),
-			[makeCon()], 
+			[makeCon()],
 			[makeInitFunc(structObj.name)],
 			[convertTableGetRoot(structObj)],
 			Lambda.flatten(funcFields),
@@ -815,7 +809,7 @@ class Converter {
 			Lambda.flatten(funcAddFields),
 			[funcEndFields]
 		]));
-		
+
 		return {
 			pack: [],
 			name: structObj.name,
@@ -883,7 +877,7 @@ class Converter {
 	static inline function makeType(name:String, ?pack:Array<String>, ?params:Null<Array<TypeParam>> = null, ?sub:Null<Null<String>> = null):ComplexType {
 		pack == null ? pack = [] : null;
 		return TPath(cast { name: name, pack: pack, params: params, sub: sub });
-	} 
+	}
 	static inline function makeFuncArg(name:String, ?type:Null<ComplexType> = null, ?opt:Null<Bool> = null, ?meta:Null<Metadata> = null, ?value:Null<Null<Expr>> = null):FunctionArg {
 		return {name: name, type: type, opt: opt, meta: meta, value: value};
 	}
@@ -966,5 +960,4 @@ class Converter {
 				pos: nullPos
 		}];
 	}
-	
 }
